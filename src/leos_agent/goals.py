@@ -39,6 +39,45 @@ class ResourceBudget:
         object.__setattr__(self, "max_risk_level", RiskLevel(self.max_risk_level))
 
 
+@dataclass
+class GoalProgress:
+    total_steps: int = 0
+    verified_steps: int = 0
+    blocked_steps: int = 0
+    failed_steps: int = 0
+    rolled_back_steps: int = 0
+
+    @property
+    def completed_steps(self) -> int:
+        return self.verified_steps
+
+    @property
+    def pending_steps(self) -> int:
+        return self.total_steps - self.verified_steps - self.blocked_steps - self.failed_steps - self.rolled_back_steps
+
+    @property
+    def phase(self) -> str:
+        if self.blocked_steps > 0:
+            return "blocked"
+        if self.failed_steps > 0 or self.rolled_back_steps > 0:
+            return "failed"
+        if self.verified_steps == self.total_steps and self.total_steps > 0:
+            return "complete"
+        if self.verified_steps > 0:
+            return "partial"
+        return "pending"
+
+
+@dataclass
+class RuntimeMetrics:
+    """Runtime counters for dynamic budget enforcement (tokens, cost, time)."""
+
+    tokens_used: int = 0
+    cost_usd: float = 0.0
+    elapsed_seconds: float = 0.0
+    retries_used: int = 0
+
+
 @dataclass(frozen=True)
 class Goal:
     """A user or system goal with explicit success and stop conditions."""

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Any, Dict, List, Optional, Protocol, Sequence
 
 from .audit import AuditLog
 from .enums import _max_risk, _risk_value
 from .goals import Goal
+from .manifest import PLAN_PROPOSAL_SCHEMA, validate_json_schema
 from .plans import ActionStep, PlanCandidate, PlanProposal, PlanScore, PlannerConfig, PlannerResult, TransactionPlan
 from .policy import PolicyEngine
+from .state import WorldState
 from .tools import ToolRegistry
 
 
@@ -97,3 +99,57 @@ class Planner:
             reason=step.reason,
             risk=step.risk,
         )
+
+
+class LLMPlannerAdapter(Protocol):
+    """Adapter protocol for LLM-based plan proposal generation.
+
+    Implementations must produce structured JSON outputs that conform to
+    `PLAN_PROPOSAL_SCHEMA`. The framework validates every proposal against this
+    schema before accepting it, ensuring the LLM cannot inject malformed steps.
+    """
+
+    def generate_proposals(self, goal: Goal, registry: ToolRegistry, state: WorldState) -> list[PlanProposal]:
+        ...
+
+
+def validate_llm_proposals(proposals_data: list[Dict[str, Any]], available_tools: set[str]) -> list[PlanProposal]:
+    """Validate and convert raw LLM proposal dicts into PlanProposal objects.
+
+    Each proposal dict is first validated against PLAN_PROPOSAL_SCHEMA.
+    Steps within each proposal are checked against available tool names.
+    Returns validated PlanProposal list.
+    Raises LLMOutputValidationError on any schema violation.
+    """
+    from .errors import LLMOutputValidationError
+
+    validated: list[PlanProposal] = []
+    for i, raw in enumerate(proposals_data):
+        issues = validate_json_schema(raw, PLAN_PROPOSAL_SCHEMA)
+        if issues:
+            raise LLMOutputValidationError(
+                f"Proposal [{i}] failed schema validation: "
+                + "; ".join(f"{issue['path']}: {issue['reason']}" for issue in issues)
+            )
+        steps_data = raw.get("steps", [])
+        steps: list[ActionStep] = []
+        for j, s in enumerate(steps_data):
+            if not isinstance(s, dict):
+                raise LLMOutputValidationError(f"Proposal [{i}] step [{j}] is not an object")
+            tool_name = s.get("tool_name", "")
+            if tool_name not in available_tools:
+                raise LLMOutputValidationError(
+                    f"Proposal [{i}] step [{j}] references unknown tool: {tool_name}"
+                )
+            steps.append(ActionStep(
+                tool_name=str(tool_name),
+                arguments=dict(s.get("arguments", {})),
+                reason=str(s.get("reason", "")),
+            ))
+        validated.append(PlanProposal(
+            steps=steps,
+            rationale=str(raw.get("rationale", "")),
+            estimated_cost=float(raw.get("estimated_cost", 0.0)),
+            expected_benefit=float(raw.get("expected_benefit", 0.5)),
+        ))
+    return validated

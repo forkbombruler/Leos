@@ -7,44 +7,90 @@ class LeosError(Exception):
     """Base class for typed Leos runtime failures."""
 
 
-class PolicyDenied(LeosError):
-    """Raised or recorded when policy blocks an action."""
+# -- intermediate grouping layers -------------------------------------------
+
+class StepFailureError(LeosError):
+    """Step-level failures: a single action step could not complete safely."""
 
 
-class DryRunFailed(LeosError):
+class PolicyError(LeosError):
+    """Policy configuration or enforcement failures."""
+
+
+class SecurityError(LeosError):
+    """Security boundary violations."""
+
+
+# -- step lifecycle errors -------------------------------------------------
+
+class DryRunFailed(StepFailureError):
     """Raised or recorded when a dry-run check fails."""
 
 
-class VerificationFailed(LeosError):
+class PreconditionFailed(StepFailureError):
+    """Raised or recorded when a step precondition is not satisfied."""
+
+
+class PostconditionFailed(StepFailureError):
+    """Raised or recorded when a step postcondition is not satisfied."""
+
+
+class VerificationFailed(StepFailureError):
     """Raised or recorded when post-action verification fails."""
 
 
-class RollbackFailed(LeosError):
+class SchemaValidationFailed(StepFailureError):
+    """Raised or recorded when structured input or output validation fails."""
+
+
+class RollbackFailed(StepFailureError):
     """Raised or recorded when rollback cannot restore the prior state."""
 
+
+class LLMOutputValidationError(StepFailureError):
+    """Raised when an LLM-generated output fails JSON Schema validation."""
+
+
+# -- policy errors ---------------------------------------------------------
+
+class PolicyDenied(PolicyError):
+    """Raised or recorded when policy blocks an action."""
+
+
+class PolicyConfigurationError(PolicyError):
+    """Raised when policy-as-code configuration is invalid or unsafe."""
+
+
+class PolicyIntegrityError(PolicyError):
+    """Raised when a signed policy manifest fails signature verification."""
+
+
+# -- security errors -------------------------------------------------------
+
+class SecretBoundaryViolation(SecurityError):
+    """Raised when a secret value attempts to cross into memory or audit state."""
+
+
+class SecretLeakedToUntrustedTool(SecurityError):
+    """Raised when a Secret value is passed to a tool without secrets_allowed."""
+
+
+class SandboxViolation(SecurityError):
+    """Raised when a tool violates its sandbox policy."""
+
+
+class WorkspaceEscapeBlocked(SecurityError):
+    """Raised or recorded when a path escapes the configured workspace."""
+
+
+# -- remaining direct LeosError children -----------------------------------
 
 class ToolTimeout(LeosError):
     """Raised or recorded when a tool exceeds its execution budget."""
 
 
-class WorkspaceEscapeBlocked(LeosError):
-    """Raised or recorded when a path escapes the configured workspace."""
-
-
-class SchemaValidationFailed(LeosError):
-    """Raised or recorded when structured input or output validation fails."""
-
-
 class BudgetExceeded(LeosError):
     """Raised or recorded when a goal or plan exceeds its resource budget."""
-
-
-class PreconditionFailed(LeosError):
-    """Raised or recorded when a step precondition is not satisfied."""
-
-
-class PostconditionFailed(LeosError):
-    """Raised or recorded when a step postcondition is not satisfied."""
 
 
 class IdempotencyConflict(LeosError):
@@ -53,11 +99,3 @@ class IdempotencyConflict(LeosError):
 
 class InvalidGoalTransition(LeosError):
     """Raised when a goal lifecycle transition is not allowed."""
-
-
-class SecretBoundaryViolation(LeosError):
-    """Raised when a secret value attempts to cross into memory or audit state."""
-
-
-class PolicyConfigurationError(LeosError):
-    """Raised when policy-as-code configuration is invalid or unsafe."""

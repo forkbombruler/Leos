@@ -1,21 +1,35 @@
-"""Command-line demo for the Leos agent kernel."""
+"""Command-line interface for the Leos agent kernel."""
 
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 from pathlib import Path
 
+from .audit import AuditAnomalyDetector
 from .core import (
     ActionStep,
     AgentKernel,
     ApprovalGate,
+    AuditLog,
     CausalHypothesis,
     CausalWorldModel,
     Goal,
     PolicyEngine,
+    Secret,
     StepStatus,
+    WorldState,
     default_registry,
+    load_policy_from_file,
+    manifest_to_json,
+    replay_audit_log,
+    sign_policy,
+    validate_policy_config,
+    verify_policy_manifest,
 )
+from .manifest import validate_task_file
+from .policy import InteractiveApprovalGate
 
 
 def build_demo_agent(workspace: Path, auto_approve: bool) -> AgentKernel:
@@ -36,10 +50,60 @@ def build_demo_agent(workspace: Path, auto_approve: bool) -> AgentKernel:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a Leos autonomous-agent kernel demo.")
+    parser = argparse.ArgumentParser(description="Leos autonomous-agent kernel.")
+    sub = parser.add_subparsers(dest="command")
+
+    validate_parser = sub.add_parser("validate-policy", help="Validate a policy configuration file.")
+    validate_parser.add_argument("file", help="Path to a policy JSON file.")
+    validate_parser.add_argument("--policy-secret", default=None, help="Secret key for verifying a signed policy manifest.")
+
+    list_parser = sub.add_parser("list-tools", help="List available tools in the registry.")
+    list_parser.add_argument("--workspace", default=".leos-workspace", help="Workspace root for workspace-scoped tools.")
+
+    dryrun_parser = sub.add_parser("dry-run", help="Dry-run a tool against a clean world state.")
+    dryrun_parser.add_argument("tool", help="Tool name.")
+    dryrun_parser.add_argument("--args", default="{}", help="Tool arguments as JSON.")
+    dryrun_parser.add_argument("--workspace", default=".leos-workspace", help="Workspace root for workspace-scoped tools.")
+
+    replay_parser = sub.add_parser("replay", help="Replay an audit log and reconstruct world state.")
+    replay_parser.add_argument("file", help="Path to a JSONL audit log file.")
+    replay_parser.add_argument("--no-verify", action="store_true", help="Skip hash-chain integrity verification.")
+
+    run_parser = sub.add_parser("run", help="Run a goal with steps from a JSON file.")
+    run_parser.add_argument("file", help="Path to a goal JSON file.")
+    run_parser.add_argument("--workspace", default=".leos-workspace", help="Sandbox workspace root.")
+    run_parser.add_argument("--auto-approve", action="store_true", help="Auto-approve actions that require human approval.")
+    run_parser.add_argument("--profile", default="developer_local", help="Policy profile name or path to a signed policy manifest.")
+    run_parser.add_argument("--policy-secret", default=None, help="Secret key for verifying a signed policy manifest.")
+    run_parser.add_argument("--principal", default=None, help="Principal (user) identity for per-user capability grants.")
+    run_parser.add_argument("--secret", action="append", default=None, metavar="KEY=VALUE", help="Secret value injected into step arguments (repeatable).")
+
+    sign_parser = sub.add_parser("sign-policy", help="Sign a policy configuration and output a signed manifest.")
+    sign_parser.add_argument("file", help="Path to a policy JSON file.")
+    sign_parser.add_argument("--secret", required=True, help="Secret key for signing.")
+    sign_parser.add_argument("--output", default=None, help="Output file path (default: stdout).")
+
+    audit_check_parser = sub.add_parser("audit-check", help="Run anomaly detection over an audit log.")
+    audit_check_parser.add_argument("file", help="Path to a JSONL audit log file.")
+
     parser.add_argument("--workspace", default=".leos-workspace", help="Sandbox workspace for reversible file actions.")
     parser.add_argument("--auto-approve", action="store_true", help="Approve demo actions that require human approval.")
     args = parser.parse_args()
+
+    if args.command == "validate-policy":
+        return _validate_policy(args.file, secret=args.policy_secret)
+    if args.command == "list-tools":
+        return _list_tools(args.workspace)
+    if args.command == "dry-run":
+        return _dry_run(args.tool, args.args, args.workspace)
+    if args.command == "replay":
+        return _replay(args.file, verify=not args.no_verify)
+    if args.command == "run":
+        return _run(args.file, args.workspace, args.auto_approve, args.profile, secret=args.policy_secret, principal=args.principal, cli_secrets=args.secret)
+    if args.command == "sign-policy":
+        return _sign_policy(args.file, args.secret, args.output)
+    if args.command == "audit-check":
+        return _audit_check(args.file)
 
     agent = build_demo_agent(Path(args.workspace), auto_approve=args.auto_approve)
     goal = Goal(
@@ -62,6 +126,246 @@ def main() -> int:
     for step in result.steps:
         print(f"{step.tool_name}: {step.status.value} risk={step.risk.value}")
     return 0 if all(step.status is StepStatus.VERIFIED for step in result.steps) else 1
+
+
+def _validate_policy(file_path: str, *, secret: str | None = None) -> int:
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
+        return 2
+
+    if secret is not None:
+        try:
+            verify_policy_manifest(data, secret)
+        except Exception as exc:
+            print(f"Signature verification failed: {exc}", file=sys.stderr)
+            return 3
+        policy_data = data.get("policy", data)
+    else:
+        policy_data = data
+
+    issues = validate_policy_config(policy_data)
+    if not issues:
+        msg = "Policy configuration is valid."
+        if secret is not None:
+            msg += " Signature verified."
+        print(msg)
+        return 0
+    for issue in issues:
+        print(f"Issue: {issue.get('reason', 'unknown')}: {issue.get('message', '')}", file=sys.stderr)
+    return 1
+
+
+def _list_tools(workspace: str) -> int:
+    registry = default_registry(Path(workspace))
+    for name in registry.names():
+        spec = registry.get(name).spec
+        permissions = ", ".join(p.value for p in spec.permissions) if spec.permissions else "none"
+        print(f"{spec.name:20s}  risk={spec.default_risk.value:<8s}  rev={spec.reversibility.value:<12s}  perm={permissions}")
+        print(f"  {spec.description}")
+    return 0
+
+
+def _dry_run(tool_name: str, args_json: str, workspace: str) -> int:
+    registry = default_registry(Path(workspace))
+    try:
+        tool = registry.get(tool_name)
+    except KeyError:
+        names = ", ".join(registry.names())
+        print(f"Error: unknown tool '{tool_name}'. Available: {names}", file=sys.stderr)
+        return 1
+    try:
+        arguments = json.loads(args_json)
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid --args JSON: {exc}", file=sys.stderr)
+        return 2
+    result = tool.dry_run(arguments, WorldState())
+    status = "OK" if result.ok else "FAIL"
+    print(f"{status}: {result.message}")
+    if result.data:
+        for k, v in result.data.items():
+            print(f"  {k}: {v}")
+    if result.error:
+        print(f"  error: {result.error}")
+    return 0 if result.ok else 1
+
+
+def _replay(file_path: str, *, verify: bool) -> int:
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    log = AuditLog(path=path)
+    result = replay_audit_log(log, verify_integrity=verify)
+    if not result.ok:
+        print(f"Integrity: FAIL ({len(result.errors)} issue(s))")
+        for err in result.errors:
+            print(f"  [{err.get('index')}] {err.get('reason')}: expected={err.get('expected')} observed={err.get('observed')}")
+        return 1
+    if verify:
+        print(f"Integrity: OK")
+    print(f"Applied events: {result.applied_events}")
+    state = result.state
+    if state.facts:
+        print("Facts:")
+        for k, v in sorted(state.facts.items()):
+            trust = state.trust.get(k, "?")
+            print(f"  {k} = {v!r}  [{trust}]")
+    if state.assumptions:
+        print("Assumptions:")
+        for k, v in sorted(state.assumptions.items()):
+            print(f"  {k} = {v!r}")
+    return 0
+
+
+def _run(file_path: str, workspace: str, auto_approve: bool, profile: str, *, secret: str | None = None, principal: str | None = None, cli_secrets: list[str] | None = None) -> int:
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
+        return 2
+
+    schema_issues = validate_task_file(data)
+    if schema_issues:
+        for issue in schema_issues:
+            print(f"Error: {issue['path']}: {issue['reason']}", file=sys.stderr)
+        return 2
+
+    goal_data = data["goal"]
+    steps_data = data["steps"]
+    steps_data = data.get("steps")
+    if not isinstance(goal_data, dict):
+        print("Error: missing or invalid 'goal' in file", file=sys.stderr)
+        return 2
+    if not isinstance(steps_data, list):
+        print("Error: missing or invalid 'steps' in file", file=sys.stderr)
+        return 2
+
+    try:
+        goal = Goal(
+            description=goal_data["description"],
+            success_criteria=goal_data["success_criteria"],
+            constraints=goal_data.get("constraints", ()),
+            stop_conditions=goal_data.get("stop_conditions", ()),
+            priority=goal_data.get("priority", 5),
+        )
+    except KeyError as exc:
+        print(f"Error: missing required goal field: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"Error: invalid goal: {exc}", file=sys.stderr)
+        return 2
+
+    steps = []
+    for i, step_data in enumerate(steps_data):
+        try:
+            steps.append(ActionStep(
+                tool_name=step_data["tool_name"],
+                arguments=step_data["arguments"],
+                reason=step_data["reason"],
+            ))
+        except KeyError as exc:
+            print(f"Error: step[{i}] missing required field: {exc}", file=sys.stderr)
+            return 2
+
+    if cli_secrets:
+        for entry in cli_secrets:
+            if "=" not in entry:
+                print(f"Error: --secret must be KEY=VALUE, got: {entry}", file=sys.stderr)
+                return 2
+            key, value = entry.split("=", 1)
+            for step in steps:
+                step.arguments[key] = Secret(value)
+
+    ws = Path(workspace)
+    registry = default_registry(ws)
+    if secret is not None:
+        try:
+            policy = load_policy_from_file(Path(profile), secret, principal=principal)
+        except Exception as exc:
+            print(f"Error: failed to load signed policy manifest '{profile}': {exc}", file=sys.stderr)
+            return 2
+    else:
+        try:
+            policy = PolicyEngine.from_profile(profile, principal=principal)
+        except Exception as exc:
+            print(f"Error: invalid profile '{profile}': {exc}", file=sys.stderr)
+            return 2
+    causal = CausalWorldModel([
+        CausalHypothesis(
+            action_name="safe_file_write",
+            affected_variables=["file_written"],
+            rationale="Writing a file should update the last written file path.",
+            confidence=0.9,
+        )
+    ])
+    if auto_approve:
+        approval = ApprovalGate(lambda step: True)
+    else:
+        approval = InteractiveApprovalGate()
+    agent = AgentKernel(registry=registry, policy=policy, causal_model=causal, approval_gate=approval)
+
+    plan = agent.build_plan(goal, steps)
+    result = agent.run(plan)
+    progress = agent.transactions.track_progress(result)
+    for step in result.steps:
+        reason_str = ""
+        blocked_events = [e for e in agent.audit_log.events if e.event_type == "step.blocked" and e.payload.get("tool") == step.tool_name]
+        if blocked_events and blocked_events[-1].payload.get("reason"):
+            reason_str = f" ({blocked_events[-1].payload['reason']})"
+        print(f"{step.tool_name}: {step.status.value} risk={step.risk.value}{reason_str}")
+    print(f"Progress: {progress.verified_steps}/{progress.total_steps} verified, "
+          f"{progress.blocked_steps} blocked, {progress.failed_steps} failed, "
+          f"{progress.rolled_back_steps} rolled-back [{progress.phase}]")
+    return 0 if all(step.status is StepStatus.VERIFIED for step in result.steps) else 1
+
+
+def _sign_policy(file_path: str, secret: str, output: str | None) -> int:
+    try:
+        with open(file_path) as f:
+            policy_data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
+        return 2
+    manifest = sign_policy(policy_data, secret)
+    output_json = manifest_to_json(manifest)
+    if output:
+        Path(output).write_text(output_json, encoding="utf-8")
+        print(f"Signed manifest written to {output}")
+    else:
+        sys.stdout.write(output_json)
+    return 0
+
+
+def _audit_check(file_path: str) -> int:
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    log = AuditLog(path=path)
+    detector = AuditAnomalyDetector()
+    findings = detector.detect(log.records())
+    if not findings:
+        print("No anomalies detected.")
+        return 0
+    for f in findings:
+        print(f"[{f.severity.upper()}] {f.rule}: {f.message}")
+        if f.evidence:
+            print(f"  evidence: {json.dumps(f.evidence)}")
+    return 1
 
 
 if __name__ == "__main__":

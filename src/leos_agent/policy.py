@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time as _time_module
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
@@ -66,6 +68,58 @@ class PolicyRule:
 
 
 @dataclass(frozen=True)
+class CapabilityGrant:
+    """A per-user, per-tool capability grant.
+
+    Restricts which permissions a principal has for specific tools.
+    An empty `tools` sequence means the grant applies to all tools.
+    """
+
+    principal: str
+    permissions: Sequence[Permission]
+    tools: Sequence[str] = ()
+    max_risk: Optional[RiskLevel] = None
+    deny_permissions: Sequence[Permission] = ()
+    expires_at: Optional[float] = None
+    max_uses: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "permissions", _permissions(self.permissions))
+        object.__setattr__(self, "deny_permissions", _permissions(self.deny_permissions))
+        if self.max_risk is not None:
+            object.__setattr__(self, "max_risk", RiskLevel(self.max_risk))
+        object.__setattr__(self, "tools", tuple(self.tools))
+        object.__setattr__(self, "_uses", 0)
+
+    def applies_to(self, principal: str, tool_name: str, *, now: Optional[float] = None) -> bool:
+        if self.principal != principal:
+            return False
+        if self.tools and tool_name not in self.tools:
+            return False
+        if self.expires_at is not None:
+            if (_time_module.time() if now is None else now) > self.expires_at:
+                return False
+        if self.max_uses is not None and self._uses >= self.max_uses:
+            return False
+        return True
+
+    def record_use(self) -> None:
+        object.__setattr__(self, '_uses', self._uses + 1)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "CapabilityGrant":
+        if "principal" not in data:
+            raise PolicyConfigurationError("Capability grant is missing principal")
+        return cls(
+            principal=str(data["principal"]),
+            permissions=tuple(data.get("permissions", ())),
+            tools=tuple(data.get("tools", ())),
+            max_risk=RiskLevel(str(data["max_risk"])) if data.get("max_risk") else None,
+            deny_permissions=tuple(data.get("deny_permissions", ())),
+        )
+
+
+@dataclass(frozen=True)
 class PolicyProfile:
     name: str
     granted_permissions: Sequence[Permission] = ()
@@ -73,6 +127,7 @@ class PolicyProfile:
     require_human_for: Sequence[Permission] = ()
     deny_permissions: Sequence[Permission] = ()
     rules: Sequence[PolicyRule] = ()
+    grants: Sequence[CapabilityGrant] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "granted_permissions", _permissions(self.granted_permissions))
@@ -83,6 +138,11 @@ class PolicyProfile:
             self,
             "rules",
             tuple(rule if isinstance(rule, PolicyRule) else PolicyRule.from_mapping(rule) for rule in self.rules),
+        )
+        object.__setattr__(
+            self,
+            "grants",
+            tuple(grant if isinstance(grant, CapabilityGrant) else CapabilityGrant.from_mapping(grant) for grant in self.grants),
         )
 
     @classmethod
@@ -96,6 +156,7 @@ class PolicyProfile:
             require_human_for=tuple(data.get("require_human_for", ())),
             deny_permissions=tuple(data.get("deny_permissions", ())),
             rules=tuple(PolicyRule.from_mapping(rule) for rule in data.get("rules", ())),
+            grants=tuple(CapabilityGrant.from_mapping(grant) for grant in data.get("grants", ())),
         )
 
 
@@ -144,6 +205,8 @@ class PolicyEngine:
         require_human_for: Optional[Iterable[Permission]] = None,
         deny_permissions: Optional[Iterable[Permission]] = None,
         rules: Optional[Iterable[PolicyRule]] = None,
+        grants: Optional[Iterable[CapabilityGrant]] = None,
+        principal: Optional[str] = None,
         profile_name: str = "custom",
     ) -> None:
         self.granted_permissions = set(granted_permissions or [])
@@ -151,10 +214,12 @@ class PolicyEngine:
         self.require_human_for = set(require_human_for or [])
         self.deny_permissions = set(deny_permissions or [])
         self.rules = tuple(rules or ())
+        self.grants = tuple(grants or ())
+        self.principal = principal
         self.profile_name = profile_name
 
     @classmethod
-    def from_profile(cls, profile: str | PolicyProfile) -> "PolicyEngine":
+    def from_profile(cls, profile: str | PolicyProfile, *, principal: Optional[str] = None) -> "PolicyEngine":
         if isinstance(profile, str):
             if profile not in BUILT_IN_POLICY_PROFILES:
                 raise KeyError(f"Unknown policy profile: {profile}")
@@ -165,12 +230,14 @@ class PolicyEngine:
             require_human_for=profile.require_human_for,
             deny_permissions=profile.deny_permissions,
             rules=profile.rules,
+            grants=profile.grants,
+            principal=principal,
             profile_name=profile.name,
         )
 
     @classmethod
-    def from_mapping(cls, data: Mapping[str, Any]) -> "PolicyEngine":
-        return cls.from_profile(PolicyProfile.from_mapping(data))
+    def from_mapping(cls, data: Mapping[str, Any], *, principal: Optional[str] = None) -> "PolicyEngine":
+        return cls.from_profile(PolicyProfile.from_mapping(data), principal=principal)
 
     def assess(self, tool: Tool, arguments: Mapping[str, Any]) -> RiskLevel:
         risk = tool.spec.default_risk
@@ -180,24 +247,51 @@ class PolicyEngine:
             return RiskLevel.HIGH
         return risk
 
-    def decide(self, step: ActionStep) -> Decision:
+    def _matching_grant(self, tool_name: str) -> Optional[CapabilityGrant]:
+        if not self.principal:
+            return None
+        for grant in self.grants:
+            if grant.applies_to(self.principal, tool_name):
+                return grant
+        return None
+
+    def decide(self, step: ActionStep) -> DecisionResult:
         configured_decision = self._decide_by_rules(step)
         if configured_decision is not None:
-            return configured_decision
+            rule = next((r for r in self.rules if r.matches(step, profile_name=self.profile_name)), None)
+            return DecisionResult(configured_decision, f"matched rule '{rule.name}'" if rule else "matched policy rule", rule.name if rule else None)
         required = set(step.required_permissions)
         if required & self.deny_permissions:
-            return Decision.DENIED
+            return DecisionResult(Decision.DENIED, "permission denied by policy")
+
+        grant = self._matching_grant(step.tool_name)
+        if grant is not None:
+            if required & set(grant.deny_permissions):
+                return DecisionResult(Decision.DENIED, f"permission denied by grant for '{grant.principal}'")
+            if required & self.require_human_for:
+                return DecisionResult(Decision.NEEDS_HUMAN, "permission requires human approval")
+            missing = required - set(grant.permissions)
+            if missing:
+                return DecisionResult(Decision.NEEDS_HUMAN, f"missing permissions: {[p.value for p in missing]}")
+            max_risk = grant.max_risk if grant.max_risk is not None else self.max_auto_risk
+            if _risk_value(step.risk) > _risk_value(max_risk):
+                return DecisionResult(Decision.NEEDS_HUMAN, f"risk {step.risk.value} exceeds max {max_risk.value}")
+            consequential = bool(step.required_permissions) or _risk_value(step.risk) >= _risk_value(RiskLevel.MEDIUM)
+            if consequential and step.reversibility in {Reversibility.COMPENSATABLE, Reversibility.IRREVERSIBLE}:
+                return DecisionResult(Decision.NEEDS_HUMAN, f"consequential {step.reversibility.value} action requires human approval")
+            return DecisionResult(Decision.APPROVED, f"granted by '{grant.principal}'")
+
         if required & self.require_human_for:
-            return Decision.NEEDS_HUMAN
+            return DecisionResult(Decision.NEEDS_HUMAN, "permission requires human approval")
         missing = required - self.granted_permissions
         if missing:
-            return Decision.NEEDS_HUMAN
+            return DecisionResult(Decision.NEEDS_HUMAN, f"missing permissions: {[p.value for p in missing]}")
         if _risk_value(step.risk) > _risk_value(self.max_auto_risk):
-            return Decision.NEEDS_HUMAN
+            return DecisionResult(Decision.NEEDS_HUMAN, f"risk {step.risk.value} exceeds max {self.max_auto_risk.value}")
         consequential = bool(step.required_permissions) or _risk_value(step.risk) >= _risk_value(RiskLevel.MEDIUM)
         if consequential and step.reversibility in {Reversibility.COMPENSATABLE, Reversibility.IRREVERSIBLE}:
-            return Decision.NEEDS_HUMAN
-        return Decision.APPROVED
+            return DecisionResult(Decision.NEEDS_HUMAN, f"consequential {step.reversibility.value} action requires human approval")
+        return DecisionResult(Decision.APPROVED, "auto-approved")
 
     def _decide_by_rules(self, step: ActionStep) -> Optional[Decision]:
         for rule in self.rules:
@@ -218,10 +312,57 @@ class ApprovalGate:
         return Decision.APPROVED if self.approver(step) else Decision.DENIED
 
 
+class InteractiveApprovalGate(ApprovalGate):
+    """Interactive approval gate that prompts the user on the terminal.
+
+    Displays the step details and waits for a [y/N] response.
+    Falls back to DENIED if stdin is not a TTY or on timeout.
+    """
+
+    def __init__(self, timeout_seconds: float = 30.0) -> None:
+        super().__init__(approver=None)
+        self.timeout_seconds = timeout_seconds
+
+    def request(self, step: ActionStep) -> Decision:
+        import sys
+
+        if not sys.stdout.isatty():
+            return Decision.DENIED
+
+        print(f"\n--- Approval Required ---")
+        print(f"Tool:      {step.tool_name}")
+        print(f"Reason:    {step.reason}")
+        print(f"Risk:      {step.risk.value}")
+        print(f"Reversible: {step.reversibility.value}")
+        if step.arguments:
+            print(f"Arguments: {json.dumps({k: v for k, v in step.arguments.items()}, default=str)}")
+        try:
+            import select
+
+            print(f"Approve? [y/N] (timeout {self.timeout_seconds:.0f}s): ", end="", flush=True)
+            ready, _, _ = select.select([sys.stdin], [], [], self.timeout_seconds)
+            if not ready:
+                print("\n(timeout)")
+                return Decision.DENIED
+            response = sys.stdin.readline().strip().lower()
+            if response in ("y", "yes"):
+                return Decision.APPROVED
+            return Decision.DENIED
+        except Exception:  # noqa: BLE001
+            return Decision.DENIED
+
+
 def _as_list(value: Any) -> list[Any]:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return [value]
+
+
+@dataclass(frozen=True)
+class DecisionResult:
+    decision: Decision
+    reason: str
+    rule_name: Optional[str] = None
 
 
 def validate_policy_config(data: Mapping[str, Any]) -> list[dict[str, Any]]:

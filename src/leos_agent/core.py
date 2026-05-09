@@ -6,7 +6,7 @@ continues to work for existing callers.
 
 from __future__ import annotations
 
-from .audit import AuditEvent, AuditLog
+from .audit import AuditAnomalyDetector, AuditEvent, AuditLog
 from .causal import (
     ActionConsequence,
     CausalEffect,
@@ -35,13 +35,20 @@ from .errors import (
     IdempotencyConflict,
     InvalidGoalTransition,
     LeosError,
+    LLMOutputValidationError,
     PolicyConfigurationError,
     PolicyDenied,
+    PolicyError,
+    PolicyIntegrityError,
     PostconditionFailed,
     PreconditionFailed,
     RollbackFailed,
+    SandboxViolation,
     SchemaValidationFailed,
     SecretBoundaryViolation,
+    SecretLeakedToUntrustedTool,
+    SecurityError,
+    StepFailureError,
     ToolTimeout,
     VerificationFailed,
     WorkspaceEscapeBlocked,
@@ -49,14 +56,15 @@ from .errors import (
 from .goals import Goal, ResourceBudget
 from .kernel import AgentKernel
 from .memory import MemoryRecord, MemorySensitivity, MemoryStore, MemoryType
-from .manifest import ToolManifest, validate_json_schema
-from .planner import Planner
+from .manifest import PLAN_PROPOSAL_SCHEMA, ToolManifest, validate_json_schema
+from .planner import LLMPlannerAdapter, Planner, validate_llm_proposals
 from .plans import ActionStep, PlanCandidate, PlanProposal, PlanScore, PlannerConfig, PlannerResult, StateCondition, TransactionPlan
-from .policy import ApprovalGate, BUILT_IN_POLICY_PROFILES, PolicyEngine, PolicyProfile, PolicyRule, validate_policy_config
+from .policy import ApprovalGate, BUILT_IN_POLICY_PROFILES, CapabilityGrant, PolicyEngine, PolicyProfile, PolicyRule, validate_policy_config
+from .policy_manifest import SignedPolicyManifest, load_policy_from_file, manifest_to_json, sign_policy, verify_policy_manifest
 from .replay import AuditReplayer, ReplayResult, replay_audit_log
 from .state import TrustLevel, WorldState
 from .task_queue import RetryPolicy, RuntimeTask, TaskQueue, TaskRunner, TimeoutPolicy, Watchdog
-from .tools import EchoTool, SafeFileWriteTool, Tool, ToolRegistry, ToolResult, ToolSpec, default_registry
+from .tools import EchoTool, SafeFileWriteTool, Secret, Tool, ToolRegistry, ToolResult, ToolSpec, default_registry
 from .transactions import TransactionManager, _error_type
 
 __all__ = [
@@ -69,6 +77,7 @@ __all__ = [
     "AuditReplayer",
     "BUILT_IN_POLICY_PROFILES",
     "BudgetExceeded",
+    "CapabilityGrant",
     "CausalEffect",
     "CausalGraph",
     "CausalHypothesis",
@@ -99,6 +108,7 @@ __all__ = [
     "PolicyConfigurationError",
     "PolicyDenied",
     "PolicyEngine",
+    "PolicyIntegrityError",
     "PolicyProfile",
     "PolicyRule",
     "PostconditionFailed",
@@ -112,7 +122,11 @@ __all__ = [
     "RuntimeTask",
     "SafeFileWriteTool",
     "SchemaValidationFailed",
+    "Secret",
     "SecretBoundaryViolation",
+    "Secret",
+    "SecretLeakedToUntrustedTool",
+    "SignedPolicyManifest",
     "StateCondition",
     "StepStatus",
     "TaskQueue",
@@ -133,7 +147,11 @@ __all__ = [
     "WorldState",
     "Watchdog",
     "default_registry",
+    "load_policy_from_file",
+    "manifest_to_json",
     "replay_audit_log",
+    "sign_policy",
     "validate_policy_config",
     "validate_json_schema",
+    "verify_policy_manifest",
 ]

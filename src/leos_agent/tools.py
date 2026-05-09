@@ -7,10 +7,37 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Protocol, Sequence
 
-from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel
+from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, SandboxPolicy
 from .errors import DryRunFailed, LeosError, SchemaValidationFailed, WorkspaceEscapeBlocked
 from .manifest import JSONSchema, ToolManifest, validate_json_schema
 from .state import WorldState
+
+
+class Secret:
+    """Wrapper that marks a value as secret.
+
+    Secrets are only unwrapped when passed to tools with `secrets_allowed=True`.
+    In all other contexts (audit logs, memory, untrusted tools), they are redacted.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def __repr__(self) -> str:
+        return "<secret>"
+
+    def unwrap(self) -> str:
+        return self._value
+
+
+def _redact_secrets(arguments: Mapping[str, Any]) -> Dict[str, Any]:
+    return {k: "<secret>" if isinstance(v, Secret) else v for k, v in arguments.items()}
+
+
+def _contains_secrets(arguments: Mapping[str, Any]) -> bool:
+    return any(isinstance(v, Secret) for v in arguments.values())
 
 
 @dataclass
@@ -40,6 +67,7 @@ class ToolSpec:
     network_access: bool = False
     filesystem_scope: str = "none"
     secrets_allowed: bool = False
+    sandbox_policy: SandboxPolicy = SandboxPolicy.NONE
     requires_human_for: Sequence[str] = ()
 
     def __post_init__(self) -> None:
@@ -49,11 +77,13 @@ class ToolSpec:
         else:
             reversibility = Reversibility(reversibility)
         compensation_strategy = CompensationStrategy(self.compensation_strategy)
+        sandbox_policy = SandboxPolicy(self.sandbox_policy)
         if not 0.0 <= self.rollback_reliability <= 1.0:
             raise ValueError("rollback_reliability must be between 0.0 and 1.0")
         object.__setattr__(self, "reversibility", reversibility)
         object.__setattr__(self, "reversible", reversibility is Reversibility.REVERSIBLE)
         object.__setattr__(self, "compensation_strategy", compensation_strategy)
+        object.__setattr__(self, "sandbox_policy", sandbox_policy)
 
     def manifest(self) -> ToolManifest:
         return ToolManifest(
@@ -68,6 +98,7 @@ class ToolSpec:
             network_access=self.network_access,
             filesystem_scope=self.filesystem_scope,
             secrets_allowed=self.secrets_allowed,
+            sandbox_policy=self.sandbox_policy,
             requires_human_for=self.requires_human_for,
             rollback_reliability=self.rollback_reliability,
             compensation_strategy=self.compensation_strategy,
@@ -162,6 +193,7 @@ class SafeFileWriteTool:
             "additionalProperties": True,
         },
         filesystem_scope="workspace",
+        sandbox_policy=SandboxPolicy.WORKSPACE,
         requires_human_for=("outside_workspace",),
     )
 
