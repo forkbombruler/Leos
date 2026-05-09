@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from .audit import AuditLog
 from .causal import CausalGraph, CounterfactualReview
@@ -10,7 +10,13 @@ from .enums import GoalStatus
 from .goals import Goal
 from .memory import MemoryStore
 from .planner import Planner
-from .plans import ActionStep, PlanProposal, PlannerConfig, PlannerResult, TransactionPlan
+from .plans import (
+    ActionStep,
+    PlannerConfig,
+    PlannerResult,
+    PlanProposal,
+    TransactionPlan,
+)
 from .policy import ApprovalGate, PolicyEngine
 from .state import WorldState
 from .tools import ToolRegistry
@@ -24,12 +30,12 @@ class AgentKernel:
         self,
         registry: ToolRegistry,
         policy: PolicyEngine,
-        causal_model: Optional[CausalGraph] = None,
-        memory: Optional[MemoryStore] = None,
-        audit_log: Optional[AuditLog] = None,
-        approval_gate: Optional[ApprovalGate] = None,
-        planner_config: Optional[PlannerConfig] = None,
-        counterfactual_review: Optional[CounterfactualReview] = None,
+        causal_model: CausalGraph | None = None,
+        memory: MemoryStore | None = None,
+        audit_log: AuditLog | None = None,
+        approval_gate: ApprovalGate | None = None,
+        planner_config: PlannerConfig | None = None,
+        counterfactual_review: CounterfactualReview | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy

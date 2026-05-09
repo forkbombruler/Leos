@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from .errors import SecretBoundaryViolation
 
@@ -38,14 +39,14 @@ class MemoryRecord:
     memory_type: MemoryType = MemoryType.FACT
     sensitivity: MemorySensitivity = MemorySensitivity.INTERNAL
     scope: str = "global"
-    source: Optional[str] = None
-    ttl: Optional[float] = None
-    last_verified_at: Optional[float] = None
+    source: str | None = None
+    ttl: float | None = None
+    last_verified_at: float | None = None
     conflicts_with: Sequence[str] = ()
     supersedes: Sequence[str] = ()
-    embedding_id: Optional[str] = None
-    access_policy: Optional[str] = None
-    forget_policy: Optional[str] = None
+    embedding_id: str | None = None
+    access_policy: str | None = None
+    forget_policy: str | None = None
     created_at: float = field(default_factory=time.time)
 
     def __post_init__(self) -> None:
@@ -56,17 +57,19 @@ class MemoryRecord:
         if self.ttl is not None and self.ttl < 0:
             raise ValueError("ttl must be non-negative")
         if self.sensitivity is MemorySensitivity.SECRET and self.memory_type is not MemoryType.SECRET_REF:
-            raise SecretBoundaryViolation("Secret values must not be stored in memory; store a secret reference instead")
+            raise SecretBoundaryViolation(
+                "Secret values must not be stored in memory; store a secret reference instead"
+            )
 
     @property
-    def expires_at(self) -> Optional[float]:
+    def expires_at(self) -> float | None:
         return None if self.ttl is None else self.created_at + self.ttl
 
-    def is_expired(self, now: Optional[float] = None) -> bool:
+    def is_expired(self, now: float | None = None) -> bool:
         expires_at = self.expires_at
         return expires_at is not None and (now if now is not None else time.time()) >= expires_at
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["memory_type"] = self.memory_type.value
         data["sensitivity"] = self.sensitivity.value
@@ -74,7 +77,7 @@ class MemoryRecord:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MemoryRecord":
+    def from_dict(cls, data: dict[str, Any]) -> MemoryRecord:
         payload = dict(data)
         payload.pop("expires_at", None)
         return cls(**payload)
@@ -83,9 +86,9 @@ class MemoryRecord:
 class MemoryStore:
     """Small persistent memory store with explicit confidence and provenance."""
 
-    def __init__(self, path: Optional[Path] = None) -> None:
+    def __init__(self, path: Path | None = None) -> None:
         self.path = path
-        self.items: List[MemoryRecord] = []
+        self.items: list[MemoryRecord] = []
         if path and path.exists():
             self.items = [MemoryRecord.from_dict(item) for item in json.loads(path.read_text(encoding="utf-8"))]
 
@@ -99,14 +102,14 @@ class MemoryStore:
         memory_type: MemoryType = MemoryType.FACT,
         sensitivity: MemorySensitivity = MemorySensitivity.INTERNAL,
         scope: str = "global",
-        source: Optional[str] = None,
-        ttl: Optional[float] = None,
-        last_verified_at: Optional[float] = None,
+        source: str | None = None,
+        ttl: float | None = None,
+        last_verified_at: float | None = None,
         conflicts_with: Sequence[str] = (),
         supersedes: Sequence[str] = (),
-        embedding_id: Optional[str] = None,
-        access_policy: Optional[str] = None,
-        forget_policy: Optional[str] = None,
+        embedding_id: str | None = None,
+        access_policy: str | None = None,
+        forget_policy: str | None = None,
     ) -> MemoryRecord:
         record = MemoryRecord(
             key=key,
@@ -134,9 +137,9 @@ class MemoryStore:
         key: str,
         *,
         include_expired: bool = False,
-        scope: Optional[str] = None,
-        memory_type: Optional[MemoryType] = None,
-    ) -> List[Dict[str, Any]]:
+        scope: str | None = None,
+        memory_type: MemoryType | None = None,
+    ) -> list[dict[str, Any]]:
         now = time.time()
         records = []
         for item in self.items:
@@ -151,7 +154,7 @@ class MemoryStore:
             records.append(item.to_dict())
         return records
 
-    def purge_expired(self, *, now: Optional[float] = None) -> int:
+    def purge_expired(self, *, now: float | None = None) -> int:
         before = len(self.items)
         self.items = [item for item in self.items if not item.is_expired(now)]
         removed = before - len(self.items)

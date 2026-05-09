@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from .audit import AuditLog
 from .causal import CausalGraph, CounterfactualReview
-from .enums import Decision, GoalStatus, Permission, Reversibility, SandboxPolicy, StepStatus, _risk_value
+from .enums import (
+    Decision,
+    GoalStatus,
+    Permission,
+    Reversibility,
+    SandboxPolicy,
+    StepStatus,
+    _risk_value,
+)
 from .errors import (
     BudgetExceeded,
     DryRunFailed,
@@ -24,10 +33,17 @@ from .goals import GoalProgress, ResourceBudget
 from .plans import ActionStep, StateCondition, TransactionPlan
 from .policy import ApprovalGate, PolicyEngine
 from .state import TrustLevel, WorldState
-from .tools import Secret, Tool, ToolRegistry, ToolResult, _contains_secrets, _redact_secrets
+from .tools import (
+    Secret,
+    Tool,
+    ToolRegistry,
+    ToolResult,
+    _contains_secrets,
+    _redact_secrets,
+)
 
 
-def _error_type(error: Optional[LeosError]) -> Optional[str]:
+def _error_type(error: LeosError | None) -> str | None:
     return type(error).__name__ if error else None
 
 
@@ -40,8 +56,8 @@ class TransactionManager:
         policy: PolicyEngine,
         causal_model: CausalGraph,
         audit_log: AuditLog,
-        approval_gate: Optional[ApprovalGate] = None,
-        counterfactual_review: Optional[CounterfactualReview] = None,
+        approval_gate: ApprovalGate | None = None,
+        counterfactual_review: CounterfactualReview | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy
@@ -51,9 +67,11 @@ class TransactionManager:
         self.counterfactual_review = counterfactual_review or CounterfactualReview(causal_model, audit_log)
 
     def execute_plan(self, plan: TransactionPlan, state: WorldState) -> TransactionPlan:
-        self.audit_log.record("plan.started", "Starting transaction plan", plan_id=plan.plan_id, goal=plan.goal.description)
+        self.audit_log.record(
+            "plan.started", "Starting transaction plan", plan_id=plan.plan_id, goal=plan.goal.description
+        )
         self._transition_plan_goal(plan, GoalStatus.RUNNING)
-        rollback_stack: List[tuple[Tool, Dict[str, Any], ActionStep]] = []
+        rollback_stack: list[tuple[Tool, dict[str, Any], ActionStep]] = []
         budget = plan.budget or plan.goal.budget
         if self._budget_exceeded(plan, budget):
             self._transition_plan_goal(plan, self._final_goal_status(plan))
@@ -75,7 +93,7 @@ class TransactionManager:
                 error = SandboxViolation(sandbox_issue)
                 self.audit_log.record(
                     "step.blocked",
-                    f"Step blocked by sandbox policy",
+                    "Step blocked by sandbox policy",
                     step_id=step.step_id,
                     tool=step.tool_name,
                     decision="denied",
@@ -87,9 +105,7 @@ class TransactionManager:
 
             if _contains_secrets(step.arguments) and not tool.spec.secrets_allowed:
                 step.status = StepStatus.BLOCKED
-                error = SecretLeakedToUntrustedTool(
-                    f"Tool '{step.tool_name}' does not allow secrets"
-                )
+                error = SecretLeakedToUntrustedTool(f"Tool '{step.tool_name}' does not allow secrets")
                 self.audit_log.record(
                     "step.blocked",
                     "Step blocked: secrets not allowed",
@@ -292,7 +308,7 @@ class TransactionManager:
         return GoalStatus.FAILED
 
     @staticmethod
-    def _enforce_sandbox(tool: Tool) -> Optional[str]:
+    def _enforce_sandbox(tool: Tool) -> str | None:
         policy = tool.spec.sandbox_policy
         if policy is SandboxPolicy.CONTAINER:
             return "container sandbox not available — requires external container runtime"
@@ -305,7 +321,7 @@ class TransactionManager:
         return None
 
     @staticmethod
-    def _prepare_arguments(arguments: Dict[str, Any], secrets_allowed: bool) -> Dict[str, Any]:
+    def _prepare_arguments(arguments: dict[str, Any], secrets_allowed: bool) -> dict[str, Any]:
         if secrets_allowed:
             return {k: v.unwrap() if isinstance(v, Secret) else v for k, v in arguments.items()}
         return _redact_secrets(arguments)
@@ -389,16 +405,19 @@ class TransactionManager:
                     )
                     return True
 
-        if hasattr(plan, 'metrics') and budget.max_retries is not None:
-            if plan.metrics.retries_used > budget.max_retries:
-                self._record_budget_exceeded(
-                    plan.steps[0] if plan.steps else None,
-                    "Plan exceeds maximum retries",
-                    limit="max_retries",
-                    allowed=budget.max_retries,
-                    actual=plan.metrics.retries_used,
-                )
-                return True
+        if (
+            hasattr(plan, "metrics")
+            and budget.max_retries is not None
+            and plan.metrics.retries_used > budget.max_retries
+        ):
+            self._record_budget_exceeded(
+                plan.steps[0] if plan.steps else None,
+                "Plan exceeds maximum retries",
+                limit="max_retries",
+                allowed=budget.max_retries,
+                actual=plan.metrics.retries_used,
+            )
+            return True
 
         self.audit_log.record(
             "budget.checked",
@@ -458,7 +477,7 @@ class TransactionManager:
     def _idempotency_marker(idempotency_key: str) -> str:
         return f"idempotency:{idempotency_key}"
 
-    def _check_conditions(self, conditions: Sequence[StateCondition], state: WorldState) -> list[Dict[str, Any]]:
+    def _check_conditions(self, conditions: Sequence[StateCondition], state: WorldState) -> list[dict[str, Any]]:
         issues = []
         for condition in conditions:
             present = condition.variable in state.facts
@@ -483,12 +502,14 @@ class TransactionManager:
                 )
         return issues
 
-    def _rollback(self, rollback_stack: List[tuple[Tool, Dict[str, Any], ActionStep]], state: WorldState) -> None:
+    def _rollback(self, rollback_stack: list[tuple[Tool, dict[str, Any], ActionStep]], state: WorldState) -> None:
         rollback_succeeded = 0
         rollback_failed = 0
         while rollback_stack:
             tool, token, step = rollback_stack.pop()
-            self.audit_log.record("rollback_attempted", "Attempting rollback", step_id=step.step_id, tool=tool.spec.name)
+            self.audit_log.record(
+                "rollback_attempted", "Attempting rollback", step_id=step.step_id, tool=tool.spec.name
+            )
             try:
                 result = tool.rollback(token, state)
             except Exception as exc:  # noqa: BLE001 - rollback failures must become audit events

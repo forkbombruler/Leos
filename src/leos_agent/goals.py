@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from typing import Optional, Sequence
 
 from .enums import GoalStatus, RiskLevel
 from .errors import InvalidGoalTransition
@@ -14,13 +14,13 @@ from .errors import InvalidGoalTransition
 class ResourceBudget:
     """Execution limits for bounded autonomy."""
 
-    max_tokens: Optional[int] = None
-    max_cost_usd: Optional[float] = None
-    max_runtime_seconds: Optional[float] = None
-    max_tool_calls: Optional[int] = None
-    max_retries: Optional[int] = None
-    max_network_requests: Optional[int] = None
-    max_file_writes: Optional[int] = None
+    max_tokens: int | None = None
+    max_cost_usd: float | None = None
+    max_runtime_seconds: float | None = None
+    max_tool_calls: int | None = None
+    max_retries: int | None = None
+    max_network_requests: int | None = None
+    max_file_writes: int | None = None
     max_risk_level: RiskLevel = RiskLevel.CRITICAL
 
     def __post_init__(self) -> None:
@@ -88,15 +88,15 @@ class Goal:
     stop_conditions: Sequence[str] = ()
     priority: int = 5
     goal_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    owner: Optional[str] = None
-    deadline: Optional[float] = None
+    owner: str | None = None
+    deadline: float | None = None
     budget: ResourceBudget = field(default_factory=ResourceBudget)
     status: GoalStatus = GoalStatus.CREATED
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "status", GoalStatus(self.status))
 
-    def transition(self, status: GoalStatus) -> "Goal":
+    def transition(self, status: GoalStatus) -> Goal:
         status = GoalStatus(status)
         if status not in _ALLOWED_GOAL_TRANSITIONS[self.status]:
             raise InvalidGoalTransition(f"Cannot transition goal from {self.status.value} to {status.value}")

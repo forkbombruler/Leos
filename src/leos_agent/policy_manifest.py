@@ -5,21 +5,21 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 from .errors import PolicyConfigurationError, PolicyIntegrityError
 from .policy import PolicyEngine
-
 
 ALGORITHM = "hmac-sha256"
 
 
 @dataclass(frozen=True)
 class SignedPolicyManifest:
-    policy: Dict[str, Any]
-    signature: Dict[str, str]
+    policy: dict[str, Any]
+    signature: dict[str, str]
 
 
 def _canonicalize(policy_data: Mapping[str, Any]) -> bytes:
@@ -55,21 +55,24 @@ def verify_policy_manifest(manifest: Mapping[str, Any], secret: str) -> None:
         raise PolicyIntegrityError("Policy signature verification failed — manifest may have been tampered")
 
 
-def load_policy_from_file(path: Path, secret: str, *, principal: Optional[str] = None) -> PolicyEngine:
+def load_policy_from_file(path: Path, secret: str, *, principal: str | None = None) -> PolicyEngine:
     try:
         with open(path, encoding="utf-8") as f:
             manifest = json.load(f)
     except FileNotFoundError:
-        raise PolicyConfigurationError(f"Policy manifest not found: {path}")
+        raise PolicyConfigurationError(f"Policy manifest not found: {path}") from None
     except json.JSONDecodeError as exc:
-        raise PolicyConfigurationError(f"Invalid JSON in policy manifest: {exc}")
+        raise PolicyConfigurationError(f"Invalid JSON in policy manifest: {exc}") from exc
     verify_policy_manifest(manifest, secret)
     return PolicyEngine.from_mapping(manifest["policy"], principal=principal)
 
 
 def manifest_to_json(manifest: SignedPolicyManifest) -> str:
-    return json.dumps(
-        {"policy": manifest.policy, "signature": manifest.signature},
-        ensure_ascii=False,
-        indent=2,
-    ) + "\n"
+    return (
+        json.dumps(
+            {"policy": manifest.policy, "signature": manifest.signature},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )

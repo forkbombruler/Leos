@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from .causal import ActionConsequence, CounterfactualReport
-from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, StepStatus
+from .enums import (
+    CompensationStrategy,
+    Permission,
+    Reversibility,
+    RiskLevel,
+    StepStatus,
+)
 from .goals import Goal, ResourceBudget
 from .state import TrustLevel
 
@@ -20,7 +27,7 @@ class StateCondition:
     variable: str
     operator: str = "exists"
     value: Any = None
-    trust_level: Optional[TrustLevel] = None
+    trust_level: TrustLevel | None = None
 
     def __post_init__(self) -> None:
         if self.operator not in {"exists", "not_exists", "equals"}:
@@ -28,7 +35,7 @@ class StateCondition:
         if self.trust_level is not None:
             object.__setattr__(self, "trust_level", TrustLevel(self.trust_level))
 
-    def describe(self) -> Dict[str, Any]:
+    def describe(self) -> dict[str, Any]:
         payload = {
             "variable": self.variable,
             "operator": self.operator,
@@ -43,7 +50,7 @@ class StateCondition:
 @dataclass
 class ActionStep:
     tool_name: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
     reason: str
     status: StepStatus = StepStatus.PENDING
     risk: RiskLevel = RiskLevel.LOW
@@ -51,9 +58,9 @@ class ActionStep:
     compensation_strategy: CompensationStrategy = CompensationStrategy.NONE
     rollback_reliability: float = 0.0
     required_permissions: Sequence[Permission] = ()
-    predictions: List[ActionConsequence] = field(default_factory=list)
-    counterfactual_report: Optional[CounterfactualReport] = None
-    idempotency_key: Optional[str] = None
+    predictions: list[ActionConsequence] = field(default_factory=list)
+    counterfactual_report: CounterfactualReport | None = None
+    idempotency_key: str | None = None
     preconditions: Sequence[StateCondition] = ()
     postconditions: Sequence[StateCondition] = ()
     invariants: Sequence[StateCondition] = ()
@@ -63,10 +70,10 @@ class ActionStep:
 @dataclass
 class TransactionPlan:
     goal: Goal
-    steps: List[ActionStep]
+    steps: list[ActionStep]
     plan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: float = field(default_factory=time.time)
-    budget: Optional[ResourceBudget] = None
+    budget: ResourceBudget | None = None
 
 
 @dataclass(frozen=True)
@@ -96,14 +103,14 @@ class PlanScore:
 class PlanCandidate:
     proposal: PlanProposal
     plan: TransactionPlan
-    score: Optional[PlanScore] = None
+    score: PlanScore | None = None
 
 
 @dataclass
 class PlannerResult:
     goal: Goal
-    candidates: List[PlanCandidate]
-    selected: Optional[PlanCandidate]
+    candidates: list[PlanCandidate]
+    selected: PlanCandidate | None
 
 
 @dataclass(frozen=True)

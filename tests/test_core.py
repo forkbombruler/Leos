@@ -1,22 +1,24 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import time
 import unittest
-import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from leos_agent import (
+    BUILT_IN_POLICY_PROFILES,
     ActionStep,
     AgentKernel,
     ApprovalGate,
     AuditLog,
-    BUILT_IN_POLICY_PROFILES,
+    AuditReplayer,
     CausalGraph,
     CausalHypothesis,
-    CompensationStrategy,
     CausalWorldModel,
+    CompensationStrategy,
     Goal,
     GoalStatus,
     InvalidGoalTransition,
@@ -24,34 +26,33 @@ from leos_agent import (
     MemoryStore,
     MemoryType,
     Permission,
-    PlanProposal,
     PlannerConfig,
+    PlanProposal,
     PolicyConfigurationError,
     PolicyEngine,
     PolicyProfile,
-    PolicyRule,
-    ResourceBudget,
-    RiskLevel,
-    AuditReplayer,
     ReplayResult,
+    ResourceBudget,
     RetryPolicy,
     Reversibility,
+    RiskLevel,
     RuntimeTask,
     SchemaValidationFailed,
-    StepStatus,
     StateCondition,
+    StepStatus,
     TaskQueue,
     TaskRunner,
     TaskStatus,
+    TimeoutPolicy,
     ToolManifest,
     TrustLevel,
-    TimeoutPolicy,
     Watchdog,
     default_registry,
     replay_audit_log,
     validate_json_schema,
     validate_policy_config,
 )
+from leos_agent.audit import AuditAnomalyDetector
 from leos_agent.cli import (
     _dry_run,
     _list_tools,
@@ -61,19 +62,29 @@ from leos_agent.cli import (
     _validate_policy,
     build_demo_agent,
 )
+from leos_agent.core import (
+    ToolRegistry,
+    ToolResult,
+    ToolSpec,
+    TransactionManager,
+    WorldState,
+)
+from leos_agent.enums import SandboxPolicy
+from leos_agent.errors import (
+    LLMOutputValidationError,
+    PolicyIntegrityError,
+    RollbackFailed,
+    SecretBoundaryViolation,
+    WorkspaceEscapeBlocked,
+)
+from leos_agent.planner import validate_llm_proposals
+from leos_agent.policy import CapabilityGrant
 from leos_agent.policy_manifest import (
     load_policy_from_file,
     sign_policy,
     verify_policy_manifest,
 )
-from leos_agent.policy import CapabilityGrant
 from leos_agent.tools import Secret
-from leos_agent.enums import SandboxPolicy
-from leos_agent.errors import LLMOutputValidationError, PolicyIntegrityError, SandboxViolation, SecretLeakedToUntrustedTool
-from leos_agent.audit import AuditAnomalyDetector
-from leos_agent.planner import validate_llm_proposals
-from leos_agent.errors import RollbackFailed, SecretBoundaryViolation, WorkspaceEscapeBlocked
-from leos_agent.core import ToolResult, ToolSpec, ToolRegistry, TransactionManager, WorldState
 
 
 class DryRunFailingTool:
@@ -364,11 +375,16 @@ class AgentKernelTests(unittest.TestCase):
         self.assertFalse(high_risk.executed)
 
     def test_goal_lifecycle_rejects_invalid_terminal_transition(self) -> None:
-        goal = Goal(
-            description="Terminal transition boundary",
-            success_criteria=["invalid transition fails"],
-            stop_conditions=["exception"],
-        ).transition(GoalStatus.PLANNING).transition(GoalStatus.RUNNING).transition(GoalStatus.SUCCEEDED)
+        goal = (
+            Goal(
+                description="Terminal transition boundary",
+                success_criteria=["invalid transition fails"],
+                stop_conditions=["exception"],
+            )
+            .transition(GoalStatus.PLANNING)
+            .transition(GoalStatus.RUNNING)
+            .transition(GoalStatus.SUCCEEDED)
+        )
 
         with self.assertRaises(InvalidGoalTransition):
             goal.transition(GoalStatus.RUNNING)
@@ -601,7 +617,15 @@ class AgentKernelTests(unittest.TestCase):
         self.assertEqual(policy.profile_name, "locked_developer")
         self.assertIn(Permission.WRITE_FILES, policy.granted_permissions)
         self.assertEqual(policy.rules[0].name, "deny_file_writer")
-        self.assertEqual(validate_policy_config({"name": "valid", "rules": [{"name": "deny_network", "when": {"permission": "network"}, "decision": "denied"}]}), [])
+        self.assertEqual(
+            validate_policy_config(
+                {
+                    "name": "valid",
+                    "rules": [{"name": "deny_network", "when": {"permission": "network"}, "decision": "denied"}],
+                }
+            ),
+            [],
+        )
 
     def test_policy_as_code_rejects_direct_approval_rules(self) -> None:
         config = {
@@ -644,7 +668,9 @@ class AgentKernelTests(unittest.TestCase):
                 success_criteria=["file is not written"],
                 stop_conditions=["blocked"],
             )
-            plan = agent.build_plan(goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test policy rule")])
+            plan = agent.build_plan(
+                goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test policy rule")]
+            )
 
             result = agent.run(plan)
 
@@ -741,7 +767,9 @@ class AgentKernelTests(unittest.TestCase):
                 stop_conditions=["blocked"],
                 budget=ResourceBudget(max_file_writes=0),
             )
-            plan = agent.build_plan(goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test file budget")])
+            plan = agent.build_plan(
+                goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test file budget")]
+            )
 
             result = agent.run(plan)
 
@@ -863,9 +891,9 @@ class AgentKernelTests(unittest.TestCase):
         issues = validate_json_schema({"path": 3, "unexpected": True}, schema)
 
         reasons = {issue["reason"] for issue in issues}
-        self.assertIn("required_missing", reasons)
-        self.assertIn("type_mismatch", reasons)
-        self.assertIn("additional_property_not_allowed", reasons)
+        self.assertIn("required", reasons)
+        self.assertIn("type", reasons)
+        self.assertIn("additionalProperties", reasons)
 
     def test_safe_file_write_schema_failure_blocks_before_execute(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -888,7 +916,7 @@ class AgentKernelTests(unittest.TestCase):
             self.assertFalse((Path(tmp) / "x.txt").exists())
             failures = [event for event in agent.audit_log.events if event.event_type == "step.dry_run_failed"]
             self.assertEqual(failures[0].payload["error_type"], "SchemaValidationFailed")
-            self.assertEqual(failures[0].payload["data"]["schema_issues"][0]["reason"], "required_missing")
+            self.assertEqual(failures[0].payload["data"]["schema_issues"][0]["reason"], "required")
 
             dry_run = registry.get("safe_file_write").dry_run({"path": "x.txt"}, agent.state)
             self.assertIsInstance(dry_run.error, SchemaValidationFailed)
@@ -915,8 +943,8 @@ class AgentKernelTests(unittest.TestCase):
         failures = [event for event in agent.audit_log.events if event.event_type == "step.output_schema_failed"]
         self.assertEqual(failures[0].payload["error_type"], "SchemaValidationFailed")
         reasons = {issue["reason"] for issue in failures[0].payload["data"]["schema_issues"]}
-        self.assertIn("type_mismatch", reasons)
-        self.assertIn("additional_property_not_allowed", reasons)
+        self.assertIn("type", reasons)
+        self.assertIn("additionalProperties", reasons)
 
     def test_memory_lifecycle_filters_expired_items(self) -> None:
         memory = MemoryStore()
@@ -1381,7 +1409,9 @@ class AgentKernelTests(unittest.TestCase):
                 success_criteria=["file is blocked"],
                 stop_conditions=["blocked"],
             )
-            plan = agent.build_plan(goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test production profile")])
+            plan = agent.build_plan(
+                goal, [ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test production profile")]
+            )
 
             result = agent.run(plan)
 
@@ -1677,7 +1707,9 @@ class CliTests(unittest.TestCase):
     def test_validate_policy_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "invalid.json"
-            path.write_text(json.dumps({"name": "bad", "rules": [{"name": "r", "when": {"tool": "x"}, "decision": "approved"}]}))
+            path.write_text(
+                json.dumps({"name": "bad", "rules": [{"name": "r", "when": {"tool": "x"}, "decision": "approved"}]})
+            )
             self.assertEqual(_validate_policy(str(path)), 1)
 
     def test_validate_policy_missing_file(self) -> None:
@@ -1730,50 +1762,66 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp) / "ws"
             goal_path = Path(tmp) / "goal.json"
-            goal_path.write_text(json.dumps({
-                "goal": {
-                    "description": "Echo test",
-                    "success_criteria": ["echo works"],
-                    "stop_conditions": ["done"],
-                },
-                "steps": [
-                    {"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}
-                ],
-            }))
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {
+                            "description": "Echo test",
+                            "success_criteria": ["echo works"],
+                            "stop_conditions": ["done"],
+                        },
+                        "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    }
+                )
+            )
             self.assertEqual(_run(str(goal_path), str(ws), auto_approve=False, profile="developer_local"), 0)
 
     def test_run_missing_file(self) -> None:
-        self.assertEqual(_run("/tmp/nonexistent_run_test.json", ".leos-workspace", auto_approve=False, profile="developer_local"), 2)
+        self.assertEqual(
+            _run("/tmp/nonexistent_run_test.json", ".leos-workspace", auto_approve=False, profile="developer_local"), 2
+        )
 
     def test_run_invalid_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             goal_path = Path(tmp) / "goal.json"
-            goal_path.write_text(json.dumps({
-                "goal": {
-                    "description": "test",
-                    "success_criteria": ["x"],
-                    "stop_conditions": ["done"],
-                },
-                "steps": [
-                    {"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}
-                ],
-            }))
-            self.assertEqual(_run(str(goal_path), ".leos-workspace", auto_approve=False, profile="nonexistent_profile"), 2)
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {
+                            "description": "test",
+                            "success_criteria": ["x"],
+                            "stop_conditions": ["done"],
+                        },
+                        "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    }
+                )
+            )
+            self.assertEqual(
+                _run(str(goal_path), ".leos-workspace", auto_approve=False, profile="nonexistent_profile"), 2
+            )
 
     def test_run_production_blocks_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp) / "ws"
             goal_path = Path(tmp) / "goal.json"
-            goal_path.write_text(json.dumps({
-                "goal": {
-                    "description": "Write test",
-                    "success_criteria": ["file exists"],
-                    "stop_conditions": ["blocked or verified"],
-                },
-                "steps": [
-                    {"tool_name": "safe_file_write", "arguments": {"path": "x.txt", "content": "x"}, "reason": "test"}
-                ],
-            }))
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {
+                            "description": "Write test",
+                            "success_criteria": ["file exists"],
+                            "stop_conditions": ["blocked or verified"],
+                        },
+                        "steps": [
+                            {
+                                "tool_name": "safe_file_write",
+                                "arguments": {"path": "x.txt", "content": "x"},
+                                "reason": "test",
+                            }
+                        ],
+                    }
+                )
+            )
             self.assertEqual(_run(str(goal_path), str(ws), auto_approve=False, profile="production"), 1)
 
 
@@ -1850,11 +1898,17 @@ class SignedPolicyManifestTests(unittest.TestCase):
             policy = {"name": "sigrun", "granted_permissions": ["write_files"]}
             manifest = sign_policy(policy, "secret")
             manifest_path.write_text(json.dumps({"policy": manifest.policy, "signature": manifest.signature}))
-            goal_path.write_text(json.dumps({
-                "goal": {"description": "t", "success_criteria": ["ok"], "stop_conditions": ["done"]},
-                "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
-            }))
-            self.assertEqual(_run(str(goal_path), str(ws), auto_approve=False, profile=str(manifest_path), secret="secret"), 0)
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {"description": "t", "success_criteria": ["ok"], "stop_conditions": ["done"]},
+                        "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    }
+                )
+            )
+            self.assertEqual(
+                _run(str(goal_path), str(ws), auto_approve=False, profile=str(manifest_path), secret="secret"), 0
+            )
 
 
 class CapabilityGrantTests(unittest.TestCase):
@@ -1887,7 +1941,7 @@ class CapabilityGrantTests(unittest.TestCase):
         self.assertEqual(result.steps[0].status, StepStatus.VERIFIED)
 
     def test_principal_without_grant_uses_global_fallback(self) -> None:
-        registry = default_registry()
+        default_registry()
         policy = PolicyEngine(
             granted_permissions=[Permission.READ_FILES],
             grants=[CapabilityGrant(principal="alice", permissions=["write_files"])],
@@ -1896,7 +1950,7 @@ class CapabilityGrantTests(unittest.TestCase):
         self.assertIn(Permission.READ_FILES, policy.granted_permissions)
 
     def test_grant_can_deny_specific_permission(self) -> None:
-        registry = default_registry()
+        default_registry()
         # EchoTool has no required_permissions, so it doesn't trigger deny
         policy = PolicyEngine(
             grants=[CapabilityGrant(principal="alice", permissions=["write_files"], deny_permissions=["write_files"])],
@@ -1930,11 +1984,17 @@ class CapabilityGrantTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp) / "ws"
             goal_path = Path(tmp) / "goal.json"
-            goal_path.write_text(json.dumps({
-                "goal": {"description": "t", "success_criteria": ["ok"], "stop_conditions": ["done"]},
-                "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
-            }))
-            self.assertEqual(_run(str(goal_path), str(ws), auto_approve=False, profile="developer_local", principal="alice"), 0)
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {"description": "t", "success_criteria": ["ok"], "stop_conditions": ["done"]},
+                        "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    }
+                )
+            )
+            self.assertEqual(
+                _run(str(goal_path), str(ws), auto_approve=False, profile="developer_local", principal="alice"), 0
+            )
 
     def test_policy_profile_constructor_normalizes_grants(self) -> None:
         profile = PolicyProfile(
@@ -1948,12 +2008,14 @@ class CapabilityGrantTests(unittest.TestCase):
         self.assertEqual(profile.grants[0].principal, "carol")
 
     def test_policy_profile_from_mapping_loads_grants(self) -> None:
-        profile = PolicyProfile.from_mapping({
-            "name": "from_map",
-            "grants": [
-                {"principal": "dave", "permissions": ["write_files"], "max_risk": "medium"},
-            ],
-        })
+        profile = PolicyProfile.from_mapping(
+            {
+                "name": "from_map",
+                "grants": [
+                    {"principal": "dave", "permissions": ["write_files"], "max_risk": "medium"},
+                ],
+            }
+        )
         self.assertEqual(len(profile.grants), 1)
         self.assertEqual(profile.grants[0].principal, "dave")
         self.assertEqual(profile.grants[0].max_risk, RiskLevel.MEDIUM)
@@ -1995,11 +2057,28 @@ class SecretTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp) / "ws"
             goal_path = Path(tmp) / "goal.json"
-            goal_path.write_text(json.dumps({
-                "goal": {"description": "t", "success_criteria": ["ok"], "stop_conditions": ["blocked or verified"]},
-                "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
-            }))
-            self.assertEqual(_run(str(goal_path), str(ws), auto_approve=False, profile="developer_local", cli_secrets=["message=mysecret"]), 1)
+            goal_path.write_text(
+                json.dumps(
+                    {
+                        "goal": {
+                            "description": "t",
+                            "success_criteria": ["ok"],
+                            "stop_conditions": ["blocked or verified"],
+                        },
+                        "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    }
+                )
+            )
+            self.assertEqual(
+                _run(
+                    str(goal_path),
+                    str(ws),
+                    auto_approve=False,
+                    profile="developer_local",
+                    cli_secrets=["message=mysecret"],
+                ),
+                1,
+            )
 
 
 class SandboxTests(unittest.TestCase):
@@ -2010,7 +2089,10 @@ class SandboxTests(unittest.TestCase):
             permissions=(),
             sandbox_policy=SandboxPolicy.CONTAINER,
         )
-        self.assertEqual(TransactionManager._enforce_sandbox(_FakeTool(tool_spec)), "container sandbox not available — requires external container runtime")
+        self.assertEqual(
+            TransactionManager._enforce_sandbox(_FakeTool(tool_spec)),
+            "container sandbox not available — requires external container runtime",
+        )
 
     def test_microvm_policy_blocks_execution(self) -> None:
         tool_spec = ToolSpec(
@@ -2019,7 +2101,10 @@ class SandboxTests(unittest.TestCase):
             permissions=(),
             sandbox_policy=SandboxPolicy.MICROVM,
         )
-        self.assertEqual(TransactionManager._enforce_sandbox(_FakeTool(tool_spec)), "microvm sandbox not available — requires external microvm runtime")
+        self.assertEqual(
+            TransactionManager._enforce_sandbox(_FakeTool(tool_spec)),
+            "microvm sandbox not available — requires external microvm runtime",
+        )
 
     def test_none_policy_allows_execution(self) -> None:
         tool_spec = ToolSpec(
@@ -2062,9 +2147,15 @@ class SandboxTests(unittest.TestCase):
 
 class LLMTests(unittest.TestCase):
     def test_validate_llm_proposals_accepts_valid_input(self) -> None:
-        proposals = validate_llm_proposals([
-            {"steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}], "rationale": "simple"},
-        ], {"echo"})
+        proposals = validate_llm_proposals(
+            [
+                {
+                    "steps": [{"tool_name": "echo", "arguments": {"message": "hi"}, "reason": "test"}],
+                    "rationale": "simple",
+                },
+            ],
+            {"echo"},
+        )
         self.assertEqual(len(proposals), 1)
         self.assertEqual(proposals[0].steps[0].tool_name, "echo")
 
@@ -2074,9 +2165,12 @@ class LLMTests(unittest.TestCase):
 
     def test_validate_llm_proposals_rejects_unknown_tool(self) -> None:
         with self.assertRaises(LLMOutputValidationError):
-            validate_llm_proposals([
-                {"steps": [{"tool_name": "nonexistent", "arguments": {}, "reason": "x"}], "rationale": "bad"},
-            ], {"echo"})
+            validate_llm_proposals(
+                [
+                    {"steps": [{"tool_name": "nonexistent", "arguments": {}, "reason": "x"}], "rationale": "bad"},
+                ],
+                {"echo"},
+            )
 
 
 class AnomalyTests(unittest.TestCase):
@@ -2102,9 +2196,7 @@ class AnomalyTests(unittest.TestCase):
 
     def test_rollback_loop_detected(self) -> None:
         detector = AuditAnomalyDetector(burst_threshold=99)
-        events = self._make_events(
-            ["rollback_attempted", "rollback_attempted", "rollback_attempted"]
-        )
+        events = self._make_events(["rollback_attempted", "rollback_attempted", "rollback_attempted"])
         for e in events:
             e["payload"]["tool"] = "bad_tool"
         findings = detector.detect(events)
@@ -2175,12 +2267,19 @@ class RedTeamTests(unittest.TestCase):
             registry = default_registry(Path(tmp))
             agent = AgentKernel(registry=registry, policy=PolicyEngine.from_profile("developer_local"))
             goal = Goal(description="t", success_criteria=["fail"], stop_conditions=["failed"])
-            plan = agent.build_plan(goal, [
-                ActionStep("safe_file_write", {
-                    "path": "x.txt",
-                    "__proto__": {"isAdmin": True},
-                }, "prototype pollution attempt"),
-            ])
+            plan = agent.build_plan(
+                goal,
+                [
+                    ActionStep(
+                        "safe_file_write",
+                        {
+                            "path": "x.txt",
+                            "__proto__": {"isAdmin": True},
+                        },
+                        "prototype pollution attempt",
+                    ),
+                ],
+            )
             result = agent.run(plan)
             self.assertEqual(result.steps[0].status, StepStatus.FAILED)
 
@@ -2195,16 +2294,23 @@ class RedTeamTests(unittest.TestCase):
                 self.assertEqual(result.steps[0].status, StepStatus.FAILED, f"path {path} should fail")
 
     def test_policy_approve_rule_rejected(self) -> None:
-        with self.assertRaises(Exception):
-            PolicyProfile.from_mapping({
-                "name": "bad",
-                "rules": [{"name": "auto_approve", "when": {"risk_at_least": "low"}, "decision": "approved"}],
-            })
+        with self.assertRaises(PolicyConfigurationError):
+            PolicyProfile.from_mapping(
+                {
+                    "name": "bad",
+                    "rules": [{"name": "auto_approve", "when": {"risk_at_least": "low"}, "decision": "approved"}],
+                }
+            )
 
     def test_budget_exhaustion_attack(self) -> None:
         registry = default_registry()
         agent = AgentKernel(registry=registry, policy=PolicyEngine())
-        goal = Goal(description="budget attack", success_criteria=["blocked"], stop_conditions=["blocked"], budget=ResourceBudget(max_tool_calls=1))
+        goal = Goal(
+            description="budget attack",
+            success_criteria=["blocked"],
+            stop_conditions=["blocked"],
+            budget=ResourceBudget(max_tool_calls=1),
+        )
         steps = [ActionStep("echo", {"message": f"msg{i}"}, f"step{i}") for i in range(20)]
         plan = agent.build_plan(goal, steps)
         result = agent.run(plan)
@@ -2215,10 +2321,13 @@ class RedTeamTests(unittest.TestCase):
         registry = default_registry()
         agent = AgentKernel(registry=registry, policy=PolicyEngine())
         goal = Goal(description="t", success_criteria=["one"], stop_conditions=["blocked"])
-        plan = agent.build_plan(goal, [
-            ActionStep("echo", {"message": "first"}, "first", idempotency_key="once"),
-            ActionStep("echo", {"message": "second"}, "second", idempotency_key="once"),
-        ])
+        plan = agent.build_plan(
+            goal,
+            [
+                ActionStep("echo", {"message": "first"}, "first", idempotency_key="once"),
+                ActionStep("echo", {"message": "second"}, "second", idempotency_key="once"),
+            ],
+        )
         result = agent.run(plan)
         self.assertEqual(result.steps[0].status, StepStatus.VERIFIED)
         self.assertEqual(result.steps[1].status, StepStatus.BLOCKED)
@@ -2227,13 +2336,15 @@ class RedTeamTests(unittest.TestCase):
         audit = AuditLog()
         audit.record("step.executed", "ok", observed={"x": 1})
         records = audit.records()
-        records.append({
-            "event_type": "step.executed",
-            "payload": {"observed": {"injected": True}},
-            "sequence": 2,
-            "previous_hash": records[0]["event_hash"],
-            "event_hash": "0" * 64,
-        })
+        records.append(
+            {
+                "event_type": "step.executed",
+                "payload": {"observed": {"injected": True}},
+                "sequence": 2,
+                "previous_hash": records[0]["event_hash"],
+                "event_hash": "0" * 64,
+            }
+        )
         result = AuditLog.verify_event_records(records)
         self.assertFalse(result.ok)
 
@@ -2241,9 +2352,12 @@ class RedTeamTests(unittest.TestCase):
         registry = default_registry()
         agent = AgentKernel(registry=registry, policy=PolicyEngine())
         goal = Goal(description="t", success_criteria=["blocked"], stop_conditions=["blocked"])
-        plan = agent.build_plan(goal, [
-            ActionStep("echo", {"token": Secret("injected-token")}, "inject secret to non-secret tool"),
-        ])
+        plan = agent.build_plan(
+            goal,
+            [
+                ActionStep("echo", {"token": Secret("injected-token")}, "inject secret to non-secret tool"),
+            ],
+        )
         result = agent.run(plan)
         self.assertEqual(result.steps[0].status, StepStatus.BLOCKED)
 
@@ -2253,10 +2367,12 @@ class InvariantTests(unittest.TestCase):
         registry = default_registry()
         agent = AgentKernel(registry=registry, policy=PolicyEngine())
         goal = Goal(description="t", success_criteria=["blocked"], stop_conditions=["blocked"])
-        plan = agent.build_plan(goal, [
-            ActionStep("echo", {"message": "hi"}, "test",
-                       invariants=(StateCondition("ready", "equals", True),)),
-        ])
+        plan = agent.build_plan(
+            goal,
+            [
+                ActionStep("echo", {"message": "hi"}, "test", invariants=(StateCondition("ready", "equals", True),)),
+            ],
+        )
         result = agent.run(plan)
         self.assertEqual(result.steps[0].status, StepStatus.BLOCKED)
         pre = [e for e in agent.audit_log.events if e.event_type == "step.precondition_failed"]
@@ -2267,10 +2383,17 @@ class InvariantTests(unittest.TestCase):
             registry = default_registry(Path(tmp))
             agent = AgentKernel(registry=registry, policy=PolicyEngine.from_profile("developer_local"))
             goal = Goal(description="t", success_criteria=["rolled back"], stop_conditions=["failed"])
-            plan = agent.build_plan(goal, [
-                ActionStep("safe_file_write", {"path": "x.txt", "content": "x"}, "test",
-                           postconditions=(StateCondition("file_written", "equals", "/dev/null"),)),
-            ])
+            plan = agent.build_plan(
+                goal,
+                [
+                    ActionStep(
+                        "safe_file_write",
+                        {"path": "x.txt", "content": "x"},
+                        "test",
+                        postconditions=(StateCondition("file_written", "equals", "/dev/null"),),
+                    ),
+                ],
+            )
             result = agent.run(plan)
             self.assertEqual(result.steps[0].status, StepStatus.ROLLED_BACK)
 
@@ -2278,10 +2401,17 @@ class InvariantTests(unittest.TestCase):
         registry = default_registry()
         agent = AgentKernel(registry=registry, policy=PolicyEngine())
         goal = Goal(description="t", success_criteria=["verified"], stop_conditions=["done"])
-        plan = agent.build_plan(goal, [
-            ActionStep("echo", {"message": "hi"}, "test",
-                       postconditions=(StateCondition("last_echo", "exists", trust_level=TrustLevel.TOOL_REPORTED),)),
-        ])
+        plan = agent.build_plan(
+            goal,
+            [
+                ActionStep(
+                    "echo",
+                    {"message": "hi"},
+                    "test",
+                    postconditions=(StateCondition("last_echo", "exists", trust_level=TrustLevel.TOOL_REPORTED),),
+                ),
+            ],
+        )
         result = agent.run(plan)
         self.assertEqual(result.steps[0].status, StepStatus.VERIFIED)
 

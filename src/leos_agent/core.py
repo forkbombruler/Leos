@@ -6,7 +6,7 @@ continues to work for existing callers.
 
 from __future__ import annotations
 
-from .audit import AuditAnomalyDetector, AuditEvent, AuditLog
+from .audit import AuditEvent, AuditLog
 from .causal import (
     ActionConsequence,
     CausalEffect,
@@ -26,8 +26,6 @@ from .enums import (
     RiskLevel,
     StepStatus,
     TaskStatus,
-    _max_risk,
-    _risk_value,
 )
 from .errors import (
     BudgetExceeded,
@@ -35,37 +33,71 @@ from .errors import (
     IdempotencyConflict,
     InvalidGoalTransition,
     LeosError,
-    LLMOutputValidationError,
     PolicyConfigurationError,
     PolicyDenied,
-    PolicyError,
     PolicyIntegrityError,
     PostconditionFailed,
     PreconditionFailed,
     RollbackFailed,
-    SandboxViolation,
     SchemaValidationFailed,
     SecretBoundaryViolation,
     SecretLeakedToUntrustedTool,
-    SecurityError,
-    StepFailureError,
     ToolTimeout,
     VerificationFailed,
     WorkspaceEscapeBlocked,
 )
 from .goals import Goal, ResourceBudget
 from .kernel import AgentKernel
+from .manifest import ToolManifest, validate_json_schema
 from .memory import MemoryRecord, MemorySensitivity, MemoryStore, MemoryType
-from .manifest import PLAN_PROPOSAL_SCHEMA, ToolManifest, validate_json_schema
-from .planner import LLMPlannerAdapter, Planner, validate_llm_proposals
-from .plans import ActionStep, PlanCandidate, PlanProposal, PlanScore, PlannerConfig, PlannerResult, StateCondition, TransactionPlan
-from .policy import ApprovalGate, BUILT_IN_POLICY_PROFILES, CapabilityGrant, PolicyEngine, PolicyProfile, PolicyRule, validate_policy_config
-from .policy_manifest import SignedPolicyManifest, load_policy_from_file, manifest_to_json, sign_policy, verify_policy_manifest
+from .planner import Planner
+from .plans import (
+    ActionStep,
+    PlanCandidate,
+    PlannerConfig,
+    PlannerResult,
+    PlanProposal,
+    PlanScore,
+    StateCondition,
+    TransactionPlan,
+)
+from .policy import (
+    BUILT_IN_POLICY_PROFILES,
+    ApprovalGate,
+    CapabilityGrant,
+    PolicyEngine,
+    PolicyProfile,
+    PolicyRule,
+    validate_policy_config,
+)
+from .policy_manifest import (
+    SignedPolicyManifest,
+    load_policy_from_file,
+    manifest_to_json,
+    sign_policy,
+    verify_policy_manifest,
+)
 from .replay import AuditReplayer, ReplayResult, replay_audit_log
 from .state import TrustLevel, WorldState
-from .task_queue import RetryPolicy, RuntimeTask, TaskQueue, TaskRunner, TimeoutPolicy, Watchdog
-from .tools import EchoTool, SafeFileWriteTool, Secret, Tool, ToolRegistry, ToolResult, ToolSpec, default_registry
-from .transactions import TransactionManager, _error_type
+from .task_queue import (
+    RetryPolicy,
+    RuntimeTask,
+    TaskQueue,
+    TaskRunner,
+    TimeoutPolicy,
+    Watchdog,
+)
+from .tools import (
+    EchoTool,
+    SafeFileWriteTool,
+    Secret,
+    Tool,
+    ToolRegistry,
+    ToolResult,
+    ToolSpec,
+    default_registry,
+)
+from .transactions import TransactionManager
 
 __all__ = [
     "ActionConsequence",

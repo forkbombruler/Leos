@@ -1,14 +1,22 @@
-"""Tool manifest metadata and minimal JSON Schema validation."""
+"""Tool manifest metadata and JSON Schema validation via jsonschema."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any
 
-from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, SandboxPolicy
+from jsonschema import Draft202012Validator, validators
 
+from .enums import (
+    CompensationStrategy,
+    Permission,
+    Reversibility,
+    RiskLevel,
+    SandboxPolicy,
+)
 
-JSONSchema = Dict[str, Any]
+JSONSchema = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -39,14 +47,35 @@ TASK_FILE_SCHEMA: JSONSchema = {
             "required": ["description", "success_criteria"],
             "properties": {
                 "description": {"type": "string"},
-                "success_criteria": {"type": "array"},
-                "constraints": {"type": "array"},
-                "stop_conditions": {"type": "array"},
+                "success_criteria": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string"},
+                },
+                "constraints": {"type": "array", "items": {"type": "string"}},
+                "stop_conditions": {"type": "array", "items": {"type": "string"}},
                 "priority": {"type": "integer"},
             },
             "additionalProperties": False,
         },
-        "steps": {"type": "array"},
+        "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["tool_name", "arguments", "reason"],
+                "properties": {
+                    "tool_name": {"type": "string"},
+                    "arguments": {"type": "object"},
+                    "reason": {"type": "string", "minLength": 1},
+                    "idempotency_key": {"type": "string"},
+                    "preconditions": {"type": "array"},
+                    "postconditions": {"type": "array"},
+                    "invariants": {"type": "array"},
+                },
+                "additionalProperties": False,
+            },
+        },
     },
     "additionalProperties": False,
 }
@@ -56,13 +85,30 @@ PLAN_PROPOSAL_SCHEMA: JSONSchema = {
     "type": "object",
     "required": ["steps", "rationale"],
     "properties": {
-        "steps": {"type": "array"},
-        "rationale": {"type": "string"},
-        "estimated_cost": {"type": "number"},
-        "expected_benefit": {"type": "number"},
+        "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["tool_name", "arguments", "reason"],
+                "properties": {
+                    "tool_name": {"type": "string"},
+                    "arguments": {"type": "object"},
+                    "reason": {"type": "string", "minLength": 1},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "rationale": {"type": "string", "minLength": 1},
+        "estimated_cost": {"type": "number", "minimum": 0},
+        "expected_benefit": {"type": "number", "minimum": 0},
     },
     "additionalProperties": False,
 }
+
+
+def _build_validator(schema: Mapping[str, Any]) -> Draft202012Validator:
+    return validators.validator_for(schema, default=Draft202012Validator)(schema)
 
 
 def validate_task_file(data: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -70,68 +116,19 @@ def validate_task_file(data: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_json_schema(instance: Any, schema: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Validate a small, dependency-free subset of JSON Schema.
-
-    Supported keywords: type, required, properties, additionalProperties.
-    This is intentionally narrow until the runtime adopts a full schema engine.
-    """
-
     if not schema:
         return []
+    v = _build_validator(schema)
     issues: list[dict[str, Any]] = []
-    _validate_node(instance, schema, path="$", issues=issues)
-    return issues
-
-
-def _validate_node(instance: Any, schema: Mapping[str, Any], *, path: str, issues: list[dict[str, Any]]) -> None:
-    expected_type = schema.get("type")
-    if expected_type and not _matches_type(instance, str(expected_type)):
+    for error in sorted(v.iter_errors(instance), key=lambda e: list(e.absolute_path)):
         issues.append(
             {
-                "path": path,
-                "reason": "type_mismatch",
-                "expected": expected_type,
-                "observed": type(instance).__name__,
+                "path": "/" + "/".join(str(p) for p in error.absolute_path) if error.absolute_path else "$",
+                "reason": error.validator,
+                "message": error.message,
+                "validator": error.validator,
+                "expected": error.schema.get("enum") or error.schema,
+                "observed": error.instance if hasattr(error, "instance") else None,
             }
         )
-        return
-
-    if expected_type != "object":
-        return
-    if not isinstance(instance, Mapping):
-        return
-
-    properties = schema.get("properties", {})
-    required = schema.get("required", ())
-    for key in required:
-        if key not in instance:
-            issues.append({"path": f"{path}.{key}", "reason": "required_missing"})
-
-    if isinstance(properties, Mapping):
-        for key, child_schema in properties.items():
-            if key in instance and isinstance(child_schema, Mapping):
-                _validate_node(instance[key], child_schema, path=f"{path}.{key}", issues=issues)
-
-    if schema.get("additionalProperties", True) is False and isinstance(properties, Mapping):
-        allowed = set(properties)
-        for key in instance:
-            if key not in allowed:
-                issues.append({"path": f"{path}.{key}", "reason": "additional_property_not_allowed"})
-
-
-def _matches_type(value: Any, expected_type: str) -> bool:
-    if expected_type == "object":
-        return isinstance(value, Mapping)
-    if expected_type == "string":
-        return isinstance(value, str)
-    if expected_type == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    if expected_type == "integer":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if expected_type == "boolean":
-        return isinstance(value, bool)
-    if expected_type == "array":
-        return isinstance(value, list)
-    if expected_type == "null":
-        return value is None
-    return True
+    return issues

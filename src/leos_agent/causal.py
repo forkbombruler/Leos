@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any
 
 from .audit import AuditLog
 from .enums import RiskLevel, _risk_value
@@ -54,25 +55,25 @@ class CounterfactualReport:
 
     step_id: str
     tool_name: str
-    action_consequences: List[ActionConsequence]
-    no_action_consequences: List[ActionConsequence]
+    action_consequences: list[ActionConsequence]
+    no_action_consequences: list[ActionConsequence]
     risk: RiskLevel
     expected_cost: float
     expected_benefit: float
-    summary: Dict[str, Any] = field(default_factory=dict)
+    summary: dict[str, Any] = field(default_factory=dict)
 
 
 class CausalGraph:
     """Action consequence model with counterfactual-friendly predictions."""
 
-    def __init__(self, hypotheses: Optional[Iterable[CausalHypothesis]] = None) -> None:
-        self.hypotheses: List[CausalHypothesis] = list(hypotheses or [])
+    def __init__(self, hypotheses: Iterable[CausalHypothesis] | None = None) -> None:
+        self.hypotheses: list[CausalHypothesis] = list(hypotheses or [])
 
     def register(self, hypothesis: CausalHypothesis) -> None:
         self.hypotheses.append(hypothesis)
 
-    def predict(self, step: Any, state: WorldState) -> List[ActionConsequence]:
-        consequences: List[ActionConsequence] = []
+    def predict(self, step: Any, state: WorldState) -> list[ActionConsequence]:
+        consequences: list[ActionConsequence] = []
         for hypothesis in self.hypotheses:
             if hypothesis.action_name != step.tool_name:
                 continue
@@ -131,7 +132,7 @@ class CausalGraph:
 class CausalWorldModel(CausalGraph):
     """Backward-compatible wrapper for the original causal model name."""
 
-    def predict(self, step: Any, state: WorldState) -> List[EffectPrediction]:
+    def predict(self, step: Any, state: WorldState) -> list[EffectPrediction]:
         consequences = super().predict(step, state)
         return [
             EffectPrediction(
@@ -150,7 +151,7 @@ class CausalWorldModel(CausalGraph):
 class CounterfactualReview:
     """Reviews intended consequences against the no-action alternative."""
 
-    def __init__(self, causal_graph: CausalGraph, audit_log: Optional[AuditLog] = None) -> None:
+    def __init__(self, causal_graph: CausalGraph, audit_log: AuditLog | None = None) -> None:
         self.causal_graph = causal_graph
         self.audit_log = audit_log
 
@@ -158,7 +159,7 @@ class CounterfactualReview:
         self,
         step: Any,
         state: WorldState,
-        predictions: Optional[Sequence[ActionConsequence]] = None,
+        predictions: Sequence[ActionConsequence] | None = None,
     ) -> CounterfactualReport:
         action_consequences = list(predictions) if predictions is not None else self.causal_graph.predict(step, state)
         no_action_consequences = [

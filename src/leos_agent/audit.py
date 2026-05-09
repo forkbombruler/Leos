@@ -6,9 +6,10 @@ import hashlib
 import json
 import time
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any
 
 from .errors import VerificationFailed
 from .tools import ToolResult
@@ -18,7 +19,7 @@ from .tools import ToolResult
 class AuditEvent:
     event_type: str
     message: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     sequence: int = 0
     previous_hash: str = ""
     event_hash: str = ""
@@ -31,9 +32,9 @@ class AuditLog:
 
     GENESIS_HASH = "0" * 64
 
-    def __init__(self, path: Optional[Path] = None) -> None:
+    def __init__(self, path: Path | None = None) -> None:
         self.path = path
-        self.events: List[AuditEvent] = []
+        self.events: list[AuditEvent] = []
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +57,7 @@ class AuditLog:
     def verify_integrity(self) -> ToolResult:
         return self.verify_event_records(self.records())
 
-    def records(self) -> List[Dict[str, Any]]:
+    def records(self) -> list[dict[str, Any]]:
         return self._records_from_path() if self.path else [asdict(event) for event in self.events]
 
     @classmethod
@@ -107,7 +108,7 @@ class AuditLog:
             )
         return ToolResult(True, "Audit integrity verification passed")
 
-    def _records_from_path(self) -> List[Dict[str, Any]]:
+    def _records_from_path(self) -> list[dict[str, Any]]:
         if not self.path or not self.path.exists():
             return []
         records = []
@@ -120,7 +121,9 @@ class AuditLog:
     @staticmethod
     def _hash_event_record(record: Mapping[str, Any]) -> str:
         hashable = {key: value for key, value in record.items() if key != "event_hash"}
-        encoded = json.dumps(hashable, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
+        encoded = json.dumps(hashable, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":")).encode(
+            "utf-8"
+        )
         return hashlib.sha256(encoded).hexdigest()
 
 
@@ -158,12 +161,14 @@ class AuditAnomalyDetector:
         for i in range(len(failures) - self.burst_threshold + 1):
             window = failures[i + self.burst_threshold - 1] - failures[i]
             if 0 < window <= self.burst_window:
-                return [AnomalyFinding(
-                    rule="burst",
-                    severity="high",
-                    message=f"Burst of {self.burst_threshold} failures in {window:.1f}s",
-                    evidence={"failure_count": len(failures), "window_seconds": window},
-                )]
+                return [
+                    AnomalyFinding(
+                        rule="burst",
+                        severity="high",
+                        message=f"Burst of {self.burst_threshold} failures in {window:.1f}s",
+                        evidence={"failure_count": len(failures), "window_seconds": window},
+                    )
+                ]
         return []
 
     def _rollback_loop_check(self, events: list[dict[str, Any]]) -> list[AnomalyFinding]:
@@ -176,12 +181,14 @@ class AuditAnomalyDetector:
             tool_counts[tool] = tool_counts.get(tool, 0) + 1
         for tool, count in tool_counts.items():
             if count >= 3 and tool:
-                return [AnomalyFinding(
-                    rule="rollback_loop",
-                    severity="high",
-                    message=f"Tool '{tool}' triggered {count} rollbacks",
-                    evidence={"tool": tool, "rollback_count": count},
-                )]
+                return [
+                    AnomalyFinding(
+                        rule="rollback_loop",
+                        severity="high",
+                        message=f"Tool '{tool}' triggered {count} rollbacks",
+                        evidence={"tool": tool, "rollback_count": count},
+                    )
+                ]
         return []
 
     def _frequency_check(self, events: list[dict[str, Any]]) -> list[AnomalyFinding]:
@@ -191,18 +198,26 @@ class AuditAnomalyDetector:
         blocked = sum(1 for e in events if e.get("event_type") == "step.blocked")
         total = len(events)
         if total >= 10 and blocked / total > 0.5:
-            findings.append(AnomalyFinding(
-                rule="frequency",
-                severity="medium",
-                message=f"High block rate: {blocked}/{total} ({blocked/total:.0%})",
-                evidence={"blocked": blocked, "total": total},
-            ))
-        fail_count = sum(1 for e in events if e.get("event_type") in {"step.execution_failed", "step.dry_run_failed", "step.verification_failed"})
+            findings.append(
+                AnomalyFinding(
+                    rule="frequency",
+                    severity="medium",
+                    message=f"High block rate: {blocked}/{total} ({blocked / total:.0%})",
+                    evidence={"blocked": blocked, "total": total},
+                )
+            )
+        fail_count = sum(
+            1
+            for e in events
+            if e.get("event_type") in {"step.execution_failed", "step.dry_run_failed", "step.verification_failed"}
+        )
         if total >= 10 and fail_count / total > 0.5:
-            findings.append(AnomalyFinding(
-                rule="frequency",
-                severity="high",
-                message=f"High failure rate: {fail_count}/{total} ({fail_count/total:.0%})",
-                evidence={"failures": fail_count, "total": total},
-            ))
+            findings.append(
+                AnomalyFinding(
+                    rule="frequency",
+                    severity="high",
+                    message=f"High failure rate: {fail_count}/{total} ({fail_count / total:.0%})",
+                    evidence={"failures": fail_count, "total": total},
+                )
+            )
         return findings

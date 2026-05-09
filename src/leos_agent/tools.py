@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Protocol, Sequence
+from typing import Any, Protocol
 
-from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, SandboxPolicy
-from .errors import DryRunFailed, LeosError, SchemaValidationFailed, WorkspaceEscapeBlocked
+from .enums import (
+    CompensationStrategy,
+    Permission,
+    Reversibility,
+    RiskLevel,
+    SandboxPolicy,
+)
+from .errors import (
+    DryRunFailed,
+    LeosError,
+    SchemaValidationFailed,
+    WorkspaceEscapeBlocked,
+)
 from .manifest import JSONSchema, ToolManifest, validate_json_schema
 from .state import WorldState
 
@@ -32,7 +44,7 @@ class Secret:
         return self._value
 
 
-def _redact_secrets(arguments: Mapping[str, Any]) -> Dict[str, Any]:
+def _redact_secrets(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {k: "<secret>" if isinstance(v, Secret) else v for k, v in arguments.items()}
 
 
@@ -44,10 +56,10 @@ def _contains_secrets(arguments: Mapping[str, Any]) -> bool:
 class ToolResult:
     ok: bool
     message: str
-    data: Dict[str, Any] = field(default_factory=dict)
-    observed_state_delta: Dict[str, Any] = field(default_factory=dict)
-    rollback_token: Optional[Dict[str, Any]] = None
-    error: Optional[LeosError] = None
+    data: dict[str, Any] = field(default_factory=dict)
+    observed_state_delta: dict[str, Any] = field(default_factory=dict)
+    rollback_token: dict[str, Any] | None = None
+    error: LeosError | None = None
 
 
 @dataclass(frozen=True)
@@ -57,7 +69,7 @@ class ToolSpec:
     permissions: Sequence[Permission]
     default_risk: RiskLevel = RiskLevel.LOW
     reversible: bool = False
-    reversibility: Optional[Reversibility] = None
+    reversibility: Reversibility | None = None
     rollback_reliability: float = 1.0
     compensation_strategy: CompensationStrategy = CompensationStrategy.NONE
     version: str = "0.1.0"
@@ -114,19 +126,16 @@ class ToolSpec:
 class Tool(Protocol):
     spec: ToolSpec
 
-    def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        ...
+    def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult: ...
 
-    def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        ...
+    def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult: ...
 
-    def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
-        ...
+    def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult: ...
 
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._tools: Dict[str, Tool] = {}
+        self._tools: dict[str, Tool] = {}
 
     def register(self, tool: Tool) -> None:
         if tool.spec.name in self._tools:
@@ -223,7 +232,9 @@ class SafeFileWriteTool:
         except Exception as exc:  # noqa: BLE001 - dry-run should report any validation issue
             return ToolResult(False, f"Invalid path: {exc}", error=DryRunFailed(str(exc)))
         if "content" not in arguments:
-            return ToolResult(False, "Missing required argument: content", error=DryRunFailed("Missing required argument: content"))
+            return ToolResult(
+                False, "Missing required argument: content", error=DryRunFailed("Missing required argument: content")
+            )
         return ToolResult(True, f"Would write {path}", data={"path": str(path)})
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
@@ -248,7 +259,7 @@ class SafeFileWriteTool:
         return ToolResult(True, f"Rolled back {path}")
 
 
-def default_registry(workspace_root: Optional[Path] = None) -> ToolRegistry:
+def default_registry(workspace_root: Path | None = None) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(EchoTool())
     if workspace_root:

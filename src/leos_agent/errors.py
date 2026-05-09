@@ -9,6 +9,7 @@ class LeosError(Exception):
 
 # -- intermediate grouping layers -------------------------------------------
 
+
 class StepFailureError(LeosError):
     """Step-level failures: a single action step could not complete safely."""
 
@@ -22,6 +23,7 @@ class SecurityError(LeosError):
 
 
 # -- step lifecycle errors -------------------------------------------------
+
 
 class DryRunFailed(StepFailureError):
     """Raised or recorded when a dry-run check fails."""
@@ -53,6 +55,7 @@ class LLMOutputValidationError(StepFailureError):
 
 # -- policy errors ---------------------------------------------------------
 
+
 class PolicyDenied(PolicyError):
     """Raised or recorded when policy blocks an action."""
 
@@ -66,6 +69,7 @@ class PolicyIntegrityError(PolicyError):
 
 
 # -- security errors -------------------------------------------------------
+
 
 class SecretBoundaryViolation(SecurityError):
     """Raised when a secret value attempts to cross into memory or audit state."""
@@ -84,6 +88,7 @@ class WorkspaceEscapeBlocked(SecurityError):
 
 
 # -- remaining direct LeosError children -----------------------------------
+
 
 class ToolTimeout(LeosError):
     """Raised or recorded when a tool exceeds its execution budget."""

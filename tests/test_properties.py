@@ -5,15 +5,12 @@ Uses stdlib random for randomised property checks — no external dependency.
 
 from __future__ import annotations
 
-import json
 import random
-import tempfile
 import unittest
-from pathlib import Path
 from typing import Any
 
 from leos_agent.audit import AuditLog
-from leos_agent.enums import GoalStatus, RiskLevel, SandboxPolicy
+from leos_agent.enums import GoalStatus, SandboxPolicy
 from leos_agent.goals import Goal
 from leos_agent.policy import PolicyEngine, PolicyProfile
 from leos_agent.tools import Secret, ToolSpec, _redact_secrets
@@ -35,7 +32,7 @@ class PropertyTests(unittest.TestCase):
             count = random.randint(1, 10)
             for i in range(count):
                 audit.record(
-                    f"test.event.{random.choice(['a','b','c'])}",
+                    f"test.event.{random.choice(['a', 'b', 'c'])}",
                     f"msg {i}",
                     value=random.randint(0, 100),
                 )
@@ -83,7 +80,7 @@ class PropertyTests(unittest.TestCase):
         for policy in (SandboxPolicy.CONTAINER, SandboxPolicy.MICROVM):
             for _ in range(5):
                 spec = ToolSpec(
-                    name=f"test_{random.randint(0,999)}",
+                    name=f"test_{random.randint(0, 999)}",
                     description="test",
                     permissions=(),
                     sandbox_policy=policy,
@@ -95,7 +92,7 @@ class PropertyTests(unittest.TestCase):
     def test_any_tool_with_network_access_is_blocked(self) -> None:
         for _ in range(10):
             spec = ToolSpec(
-                name=f"nettool_{random.randint(0,999)}",
+                name=f"nettool_{random.randint(0, 999)}",
                 description="test",
                 permissions=(),
                 network_access=True,
@@ -108,9 +105,27 @@ class PropertyTests(unittest.TestCase):
     def test_any_valid_transition_sequence_is_accepted(self) -> None:
         valid_from = {
             GoalStatus.CREATED: {GoalStatus.CLARIFYING, GoalStatus.PLANNING, GoalStatus.CANCELLED, GoalStatus.ARCHIVED},
-            GoalStatus.PLANNING: {GoalStatus.AWAITING_APPROVAL, GoalStatus.RUNNING, GoalStatus.BLOCKED, GoalStatus.CANCELLED},
-            GoalStatus.RUNNING: {GoalStatus.PAUSED, GoalStatus.BLOCKED, GoalStatus.FAILED, GoalStatus.PARTIALLY_DONE, GoalStatus.SUCCEEDED, GoalStatus.CANCELLED},
-            GoalStatus.BLOCKED: {GoalStatus.PLANNING, GoalStatus.RUNNING, GoalStatus.FAILED, GoalStatus.CANCELLED, GoalStatus.ARCHIVED},
+            GoalStatus.PLANNING: {
+                GoalStatus.AWAITING_APPROVAL,
+                GoalStatus.RUNNING,
+                GoalStatus.BLOCKED,
+                GoalStatus.CANCELLED,
+            },
+            GoalStatus.RUNNING: {
+                GoalStatus.PAUSED,
+                GoalStatus.BLOCKED,
+                GoalStatus.FAILED,
+                GoalStatus.PARTIALLY_DONE,
+                GoalStatus.SUCCEEDED,
+                GoalStatus.CANCELLED,
+            },
+            GoalStatus.BLOCKED: {
+                GoalStatus.PLANNING,
+                GoalStatus.RUNNING,
+                GoalStatus.FAILED,
+                GoalStatus.CANCELLED,
+                GoalStatus.ARCHIVED,
+            },
             GoalStatus.FAILED: {GoalStatus.PLANNING, GoalStatus.ARCHIVED},
             GoalStatus.SUCCEEDED: {GoalStatus.ARCHIVED},
         }
@@ -132,9 +147,16 @@ class PropertyTests(unittest.TestCase):
     def test_policy_profile_from_mapping_round_trips(self) -> None:
         profiles = [
             {"name": "p1", "granted_permissions": ["read_files"], "max_auto_risk": "low"},
-            {"name": "p2", "granted_permissions": ["write_files"], "rules": [{"name": "r1", "when": {"tool": "echo"}, "decision": "denied"}]},
+            {
+                "name": "p2",
+                "granted_permissions": ["write_files"],
+                "rules": [{"name": "r1", "when": {"tool": "echo"}, "decision": "denied"}],
+            },
             {"name": "p3", "max_auto_risk": "high", "deny_permissions": ["network"]},
-            {"name": "p4", "grants": [{"principal": "alice", "permissions": ["write_files"], "tools": ["safe_file_write"]}]},
+            {
+                "name": "p4",
+                "grants": [{"principal": "alice", "permissions": ["write_files"], "tools": ["safe_file_write"]}],
+            },
         ]
         for mapping in profiles:
             profile = PolicyProfile.from_mapping(mapping)

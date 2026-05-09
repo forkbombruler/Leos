@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 
 
 class TrustLevel(str, Enum):
@@ -25,12 +25,12 @@ class WorldState:
     agent from silently confusing guesses with reality.
     """
 
-    facts: Dict[str, Any] = field(default_factory=dict)
-    assumptions: Dict[str, Any] = field(default_factory=dict)
-    uncertainty: Dict[str, float] = field(default_factory=dict)
-    trust: Dict[str, TrustLevel] = field(default_factory=dict)
+    facts: dict[str, Any] = field(default_factory=dict)
+    assumptions: dict[str, Any] = field(default_factory=dict)
+    uncertainty: dict[str, float] = field(default_factory=dict)
+    trust: dict[str, TrustLevel] = field(default_factory=dict)
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         return {
             "facts": dict(self.facts),
             "assumptions": dict(self.assumptions),
@@ -42,7 +42,7 @@ class WorldState:
         self.facts[key] = value
         self.trust[key] = trust_level
 
-    def observe(self, delta: Dict[str, Any], *, trust_level: TrustLevel = TrustLevel.TOOL_REPORTED) -> None:
+    def observe(self, delta: dict[str, Any], *, trust_level: TrustLevel = TrustLevel.TOOL_REPORTED) -> None:
         for key, value in delta.items():
             self.set_fact(key, value, trust_level=trust_level)
 
