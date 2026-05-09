@@ -117,7 +117,8 @@ class TaskQueue:
         self._conn.commit()
 
     def _load_tasks(self) -> None:
-        assert self._conn is not None
+        if self._conn is None:
+            raise RuntimeError("_load_tasks called without a database connection")
         rows = self._conn.execute("SELECT * FROM tasks ORDER BY enqueued_at").fetchall()
         for row in rows:
             task = RuntimeTask(

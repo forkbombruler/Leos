@@ -132,7 +132,7 @@ class CausalGraph:
 class CausalWorldModel(CausalGraph):
     """Backward-compatible wrapper for the original causal model name."""
 
-    def predict(self, step: Any, state: WorldState) -> list[EffectPrediction]:
+    def predict(self, step: Any, state: WorldState) -> list[ActionConsequence]:
         consequences = super().predict(step, state)
         return [
             EffectPrediction(

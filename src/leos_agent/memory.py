@@ -20,14 +20,14 @@ class MemoryType(str, Enum):
     FAILURE = "failure"
     POLICY = "policy"
     HYPOTHESIS = "hypothesis"
-    SECRET_REF = "secret_ref"
+    SECRET_REF = "secret_ref"  # nosec B105
 
 
 class MemorySensitivity(str, Enum):
     PUBLIC = "public"
     INTERNAL = "internal"
     SENSITIVE = "sensitive"
-    SECRET = "secret"
+    SECRET = "secret"  # nosec B105
 
 
 @dataclass(frozen=True)

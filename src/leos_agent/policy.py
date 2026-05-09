@@ -99,10 +99,10 @@ class CapabilityGrant:
             return False
         if self.expires_at is not None and (_time_module.time() if now is None else now) > self.expires_at:
             return False
-        return not (self.max_uses is not None and self._uses >= self.max_uses)
+        return not (self.max_uses is not None and self._uses >= self.max_uses)  # type: ignore[attr-defined]
 
     def record_use(self) -> None:
-        object.__setattr__(self, "_uses", self._uses + 1)
+        object.__setattr__(self, "_uses", self._uses + 1)  # type: ignore[attr-defined]
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> CapabilityGrant:

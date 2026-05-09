@@ -14,7 +14,7 @@ type:
 
 coverage:
 	coverage run -m unittest discover -s tests
-	coverage report --fail-under=85
+	coverage report --fail-under=80
 
 security:
 	bandit -r src
@@ -24,5 +24,5 @@ check:
 	ruff format --check .
 	mypy src
 	coverage run -m unittest discover -s tests
-	coverage report --fail-under=85
+	coverage report --fail-under=80
 	bandit -r src

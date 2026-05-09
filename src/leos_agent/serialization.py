@@ -7,7 +7,10 @@ RetryPolicy, TimeoutPolicy, and RuntimeTask to/from JSON-compatible dicts.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .task_queue import RetryPolicy, TimeoutPolicy
 
 from .enums import (
     GoalStatus,
@@ -125,7 +128,7 @@ def serialize_retry_policy(policy: object) -> str:
     return json.dumps({"max_attempts": policy.max_attempts})  # type: ignore[attr-defined]
 
 
-def deserialize_retry_policy(json_str: str) -> object:
+def deserialize_retry_policy(json_str: str) -> RetryPolicy:
     from .task_queue import RetryPolicy
 
     data = json.loads(json_str)
@@ -141,7 +144,7 @@ def serialize_timeout_policy(policy: object) -> str:
     )
 
 
-def deserialize_timeout_policy(json_str: str) -> object:
+def deserialize_timeout_policy(json_str: str) -> TimeoutPolicy:
     from .task_queue import TimeoutPolicy
 
     data = json.loads(json_str)

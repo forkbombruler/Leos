@@ -90,7 +90,7 @@ class TransactionManager:
             sandbox_issue = self._enforce_sandbox(tool)
             if sandbox_issue:
                 step.status = StepStatus.BLOCKED
-                error = SandboxViolation(sandbox_issue)
+                error: LeosError = SandboxViolation(sandbox_issue)
                 self.audit_log.record(
                     "step.blocked",
                     "Step blocked by sandbox policy",
@@ -410,8 +410,10 @@ class TransactionManager:
             and budget.max_retries is not None
             and plan.metrics.retries_used > budget.max_retries
         ):
+            if not plan.steps:
+                return True
             self._record_budget_exceeded(
-                plan.steps[0] if plan.steps else None,
+                plan.steps[0],
                 "Plan exceeds maximum retries",
                 limit="max_retries",
                 allowed=budget.max_retries,

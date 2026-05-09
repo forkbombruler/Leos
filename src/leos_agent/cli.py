@@ -219,7 +219,7 @@ def _list_tools(workspace: str) -> int:
         permissions = ", ".join(p.value for p in spec.permissions) if spec.permissions else "none"
         print(
             f"{spec.name:20s}  risk={spec.default_risk.value:<8s}  "
-            f"rev={spec.reversibility.value:<12s}  perm={permissions}"
+            f"rev={(spec.reversibility.value if spec.reversibility else '?'):<12s}  perm={permissions}"
         )
         print(f"  {spec.description}")
     return 0
