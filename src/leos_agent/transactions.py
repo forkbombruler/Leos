@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .audit import AuditLog
 from .causal import CausalGraph, CounterfactualReview
-from .enums import Decision, GoalStatus, Permission, Reversibility, StepStatus, _risk_value
+from .enums import Decision, GoalStatus, Permission, Reversibility, SandboxPolicy, StepStatus, _risk_value
 from .errors import (
     BudgetExceeded,
     DryRunFailed,
@@ -16,13 +16,15 @@ from .errors import (
     PostconditionFailed,
     PreconditionFailed,
     RollbackFailed,
+    SandboxViolation,
     SchemaValidationFailed,
+    SecretLeakedToUntrustedTool,
 )
-from .goals import ResourceBudget
+from .goals import GoalProgress, ResourceBudget
 from .plans import ActionStep, StateCondition, TransactionPlan
 from .policy import ApprovalGate, PolicyEngine
 from .state import TrustLevel, WorldState
-from .tools import Tool, ToolRegistry, ToolResult
+from .tools import Secret, Tool, ToolRegistry, ToolResult, _contains_secrets, _redact_secrets
 
 
 def _error_type(error: Optional[LeosError]) -> Optional[str]:
@@ -66,6 +68,39 @@ class TransactionManager:
         for step in plan.steps:
             tool = self.registry.get(step.tool_name)
             self._hydrate_step_metadata(step, tool)
+
+            sandbox_issue = self._enforce_sandbox(tool)
+            if sandbox_issue:
+                step.status = StepStatus.BLOCKED
+                error = SandboxViolation(sandbox_issue)
+                self.audit_log.record(
+                    "step.blocked",
+                    f"Step blocked by sandbox policy",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    decision="denied",
+                    error_type=type(error).__name__,
+                    reason=sandbox_issue,
+                )
+                self._rollback(rollback_stack, state)
+                break
+
+            if _contains_secrets(step.arguments) and not tool.spec.secrets_allowed:
+                step.status = StepStatus.BLOCKED
+                error = SecretLeakedToUntrustedTool(
+                    f"Tool '{step.tool_name}' does not allow secrets"
+                )
+                self.audit_log.record(
+                    "step.blocked",
+                    "Step blocked: secrets not allowed",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    decision="denied",
+                    error_type=type(error).__name__,
+                )
+                self._rollback(rollback_stack, state)
+                break
+
             step.predictions = self.causal_model.predict(step, state)
             step.counterfactual_report = self.counterfactual_review.review(step, state, step.predictions)
 
@@ -88,7 +123,8 @@ class TransactionManager:
                 self._rollback(rollback_stack, state)
                 break
 
-            decision = self.policy.decide(step)
+            decision_result = self.policy.decide(step)
+            decision = decision_result.decision
             if decision is Decision.NEEDS_HUMAN:
                 decision = self.approval_gate.request(step)
             if decision is not Decision.APPROVED:
@@ -100,6 +136,8 @@ class TransactionManager:
                     step_id=step.step_id,
                     tool=step.tool_name,
                     decision=decision.value,
+                    reason=decision_result.reason,
+                    rule_name=decision_result.rule_name,
                     reversibility=step.reversibility.value,
                     compensation_strategy=step.compensation_strategy.value,
                     error_type=type(error).__name__,
@@ -107,7 +145,8 @@ class TransactionManager:
                 self._rollback(rollback_stack, state)
                 break
 
-            dry_run = tool.dry_run(step.arguments, state)
+            prepared_args = self._prepare_arguments(step.arguments, tool.spec.secrets_allowed)
+            dry_run = tool.dry_run(prepared_args, state)
             if not dry_run.ok:
                 step.status = StepStatus.FAILED
                 error = dry_run.error or DryRunFailed(dry_run.message)
@@ -123,7 +162,7 @@ class TransactionManager:
             step.status = StepStatus.DRY_RUN_OK
             self.audit_log.record("step.dry_run_ok", dry_run.message, step_id=step.step_id, tool=step.tool_name)
 
-            result = tool.execute(step.arguments, state)
+            result = tool.execute(prepared_args, state)
             if not result.ok:
                 step.status = StepStatus.FAILED
                 self.audit_log.record(
@@ -193,6 +232,15 @@ class TransactionManager:
                 break
 
             state.mark_trust(result.observed_state_delta.keys(), TrustLevel.VERIFIED)
+            self._record_grant_use(step)
+            self.audit_log.record(
+                "state.trust_escalated",
+                "Trust escalated for observed state keys",
+                step_id=step.step_id,
+                keys=list(result.observed_state_delta),
+                from_trust=TrustLevel.TOOL_REPORTED.value,
+                to_trust=TrustLevel.VERIFIED.value,
+            )
             if step.idempotency_key:
                 self._record_idempotency_key(step, state)
             step.status = StepStatus.VERIFIED
@@ -242,6 +290,44 @@ class TransactionManager:
         if any(step.status in {StepStatus.FAILED, StepStatus.ROLLED_BACK} for step in plan.steps):
             return GoalStatus.FAILED
         return GoalStatus.FAILED
+
+    @staticmethod
+    def _enforce_sandbox(tool: Tool) -> Optional[str]:
+        policy = tool.spec.sandbox_policy
+        if policy is SandboxPolicy.CONTAINER:
+            return "container sandbox not available — requires external container runtime"
+        if policy is SandboxPolicy.MICROVM:
+            return "microvm sandbox not available — requires external microvm runtime"
+        if tool.spec.network_access:
+            return "network access not allowed in default sandbox"
+        if policy is SandboxPolicy.WORKSPACE and tool.spec.filesystem_scope == "none":
+            return "workspace sandbox requires filesystem_scope"
+        return None
+
+    @staticmethod
+    def _prepare_arguments(arguments: Dict[str, Any], secrets_allowed: bool) -> Dict[str, Any]:
+        if secrets_allowed:
+            return {k: v.unwrap() if isinstance(v, Secret) else v for k, v in arguments.items()}
+        return _redact_secrets(arguments)
+
+    def track_progress(self, plan: TransactionPlan) -> GoalProgress:
+        progress = GoalProgress(total_steps=len(plan.steps))
+        for step in plan.steps:
+            if step.status is StepStatus.VERIFIED:
+                progress.verified_steps += 1
+            elif step.status is StepStatus.BLOCKED:
+                progress.blocked_steps += 1
+            elif step.status in {StepStatus.FAILED, StepStatus.ROLLED_BACK}:
+                if step.status is StepStatus.ROLLED_BACK:
+                    progress.rolled_back_steps += 1
+                else:
+                    progress.failed_steps += 1
+        return progress
+
+    def _record_grant_use(self, step: ActionStep) -> None:
+        grant = self.policy._matching_grant(step.tool_name)
+        if grant is not None:
+            grant.record_use()
 
     def _hydrate_step_metadata(self, step: ActionStep, tool: Tool) -> None:
         step.required_permissions = tuple(tool.spec.permissions)
@@ -302,6 +388,17 @@ class TransactionManager:
                         actual=network_requests,
                     )
                     return True
+
+        if hasattr(plan, 'metrics') and budget.max_retries is not None:
+            if plan.metrics.retries_used > budget.max_retries:
+                self._record_budget_exceeded(
+                    plan.steps[0] if plan.steps else None,
+                    "Plan exceeds maximum retries",
+                    limit="max_retries",
+                    allowed=budget.max_retries,
+                    actual=plan.metrics.retries_used,
+                )
+                return True
 
         self.audit_log.record(
             "budget.checked",

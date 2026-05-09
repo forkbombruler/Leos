@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Sequence
 
-from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel
+from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, SandboxPolicy
 
 
 JSONSchema = Dict[str, Any]
@@ -24,9 +24,49 @@ class ToolManifest:
     network_access: bool = False
     filesystem_scope: str = "none"
     secrets_allowed: bool = False
+    sandbox_policy: SandboxPolicy = SandboxPolicy.NONE
     requires_human_for: Sequence[str] = ()
     rollback_reliability: float = 1.0
     compensation_strategy: CompensationStrategy = CompensationStrategy.NONE
+
+
+TASK_FILE_SCHEMA: JSONSchema = {
+    "type": "object",
+    "required": ["goal", "steps"],
+    "properties": {
+        "goal": {
+            "type": "object",
+            "required": ["description", "success_criteria"],
+            "properties": {
+                "description": {"type": "string"},
+                "success_criteria": {"type": "array"},
+                "constraints": {"type": "array"},
+                "stop_conditions": {"type": "array"},
+                "priority": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+        "steps": {"type": "array"},
+    },
+    "additionalProperties": False,
+}
+
+
+PLAN_PROPOSAL_SCHEMA: JSONSchema = {
+    "type": "object",
+    "required": ["steps", "rationale"],
+    "properties": {
+        "steps": {"type": "array"},
+        "rationale": {"type": "string"},
+        "estimated_cost": {"type": "number"},
+        "expected_benefit": {"type": "number"},
+    },
+    "additionalProperties": False,
+}
+
+
+def validate_task_file(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return validate_json_schema(data, TASK_FILE_SCHEMA)
 
 
 def validate_json_schema(instance: Any, schema: Mapping[str, Any]) -> list[dict[str, Any]]:

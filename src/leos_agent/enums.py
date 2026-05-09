@@ -82,6 +82,13 @@ class TaskStatus(str, Enum):
     TIMED_OUT = "timed_out"
 
 
+class SandboxPolicy(str, Enum):
+    NONE = "none"
+    WORKSPACE = "workspace"
+    CONTAINER = "container"
+    MICROVM = "microvm"
+
+
 _RISK_VALUES = {
     RiskLevel.LOW: 1,
     RiskLevel.MEDIUM: 2,
