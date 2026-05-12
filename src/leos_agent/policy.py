@@ -326,6 +326,66 @@ class ApprovalGate:
         return Decision.APPROVED if self.approver(step) else Decision.DENIED
 
 
+@dataclass(frozen=True)
+class ApprovalRequest:
+    """Auditable, non-chain-of-thought approval summary for one step."""
+
+    goal: str
+    action: str
+    impact: str
+    risk: str
+    reversibility: str
+    evidence: list[str]
+    alternatives: list[str]
+    minimal_permissions: list[str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "goal": self.goal,
+            "action": self.action,
+            "impact": self.impact,
+            "risk": self.risk,
+            "reversibility": self.reversibility,
+            "evidence": list(self.evidence),
+            "alternatives": list(self.alternatives),
+            "minimal_permissions": list(self.minimal_permissions),
+        }
+
+
+def build_approval_request(step: ActionStep, *, goal: str = "Execute requested step") -> ApprovalRequest:
+    path = step.arguments.get("path")
+    target = f" target={path}" if isinstance(path, str) else ""
+    evidence = [step.reason]
+    if step.preconditions:
+        evidence.extend(f"precondition:{condition.variable}" for condition in step.preconditions)
+    if step.idempotency_key:
+        evidence.append(f"idempotency_key:{step.idempotency_key}")
+    permissions = sorted({permission.value for permission in step.required_permissions})
+    return ApprovalRequest(
+        goal=goal,
+        action=f"{step.tool_name}{target}",
+        impact=_summarize_impact(step),
+        risk=f"{step.risk.value}: {step.reason}",
+        reversibility=(
+            f"{step.reversibility.value}; compensation={step.compensation_strategy.value}; "
+            f"rollback_reliability={step.rollback_reliability:.2f}"
+        ),
+        evidence=evidence,
+        alternatives=["deny and leave state unchanged", "request a lower-risk or narrower step"],
+        minimal_permissions=permissions,
+    )
+
+
+def _summarize_impact(step: ActionStep) -> str:
+    if step.required_permissions:
+        permissions = ", ".join(sorted(permission.value for permission in step.required_permissions))
+        return f"requires permissions: {permissions}"
+    if step.arguments:
+        keys = ", ".join(sorted(str(key) for key in step.arguments))
+        return f"uses arguments: {keys}"
+    return "no external permission declared"
+
+
 class InteractiveApprovalGate(ApprovalGate):
     """Interactive approval gate that prompts the user on the terminal.
 
@@ -344,10 +404,15 @@ class InteractiveApprovalGate(ApprovalGate):
             return Decision.DENIED
 
         print("\n--- Approval Required ---")
-        print(f"Tool:      {step.tool_name}")
-        print(f"Reason:    {step.reason}")
-        print(f"Risk:      {step.risk.value}")
-        print(f"Reversible: {step.reversibility.value}")
+        request = build_approval_request(step)
+        print(f"Goal:       {request.goal}")
+        print(f"Action:     {request.action}")
+        print(f"Impact:     {request.impact}")
+        print(f"Risk:       {request.risk}")
+        print(f"Reversible: {request.reversibility}")
+        print(f"Evidence:   {json.dumps(request.evidence, ensure_ascii=False)}")
+        print(f"Alternates: {json.dumps(request.alternatives, ensure_ascii=False)}")
+        print(f"Permissions:{json.dumps(request.minimal_permissions, ensure_ascii=False)}")
         if step.arguments:
             print(f"Arguments: {json.dumps({k: v for k, v in step.arguments.items()}, default=str)}")
         try:

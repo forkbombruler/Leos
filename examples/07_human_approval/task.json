@@ -1,0 +1,17 @@
+{
+  "goal": {
+    "description": "Demonstrate human approval boundary",
+    "success_criteria": ["write only happens after approval"],
+    "stop_conditions": ["approval is granted or denied"]
+  },
+  "steps": [
+    {
+      "tool_name": "safe_file_write",
+      "arguments": {
+        "path": "approval.txt",
+        "content": "This write should require approval in conservative profiles.\n"
+      },
+      "reason": "Show approval gate behavior for a consequential action"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-.PHONY: test lint format-check type coverage security check
+.PHONY: test lint format-check type coverage security mutation-smoke fuzz-smoke check
 
 test:
 	python -m unittest discover -s tests
@@ -18,6 +18,12 @@ coverage:
 
 security:
 	bandit -r src
+
+mutation-smoke:
+	python scripts/mutation_smoke.py
+
+fuzz-smoke:
+	PYTHONPATH=src python scripts/fuzz_smoke.py
 
 check:
 	ruff check .

@@ -31,6 +31,7 @@ from .core import (
 from .manifest import validate_task_file
 from .policy import InteractiveApprovalGate
 from .task_queue import TaskQueue, TaskRunner
+from .trace_viewer import render_trace_html
 
 
 def build_demo_agent(workspace: Path, auto_approve: bool) -> AgentKernel:
@@ -112,6 +113,11 @@ def main() -> int:
     inspect_parser = sub.add_parser("inspect-audit", help="Replay audit log with anomaly detection.")
     inspect_parser.add_argument("file", help="Path to a JSONL audit log file.")
 
+    trace_parser = sub.add_parser("trace-html", help="Render an audit log as a static HTML trace.")
+    trace_parser.add_argument("file", help="Path to a JSONL audit log file.")
+    trace_parser.add_argument("--output", default=None, help="Output HTML path (default: stdout).")
+    trace_parser.add_argument("--title", default="Leos Trace", help="HTML page title.")
+
     manifest_parser = sub.add_parser("manifest", help="Output registered tool manifests as JSON.")
     manifest_parser.add_argument("--workspace", default=".leos-workspace", help="Workspace root.")
 
@@ -147,6 +153,8 @@ def main() -> int:
         return _validate_task(args.file, args.workspace)
     if args.command == "inspect-audit":
         return _inspect_audit(args.file)
+    if args.command == "trace-html":
+        return _trace_html(args.file, output=args.output, title=args.title)
     if args.command == "manifest":
         return _manifest(args.workspace)
     if args.command == "queue-demo":
@@ -529,6 +537,21 @@ def _inspect_audit(file_path: str) -> int:
     if result.state.facts:
         print(f"Facts: {len(result.state.facts)} key(s)")
     return 0 if result.ok else 1
+
+
+def _trace_html(file_path: str, *, output: str | None, title: str) -> int:
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return 2
+    log = AuditLog(path=path)
+    html_doc = render_trace_html(log.records(), title=title)
+    if output:
+        Path(output).write_text(html_doc, encoding="utf-8")
+        print(f"Trace written to {output}")
+    else:
+        sys.stdout.write(html_doc)
+    return 0
 
 
 def _manifest(workspace: str) -> int:

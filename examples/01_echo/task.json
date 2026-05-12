@@ -1,0 +1,16 @@
+{
+  "goal": {
+    "description": "Echo a message",
+    "success_criteria": ["last_echo is recorded"],
+    "stop_conditions": ["one step completes"]
+  },
+  "steps": [
+    {
+      "tool_name": "echo",
+      "arguments": {
+        "message": "hello from Leos"
+      },
+      "reason": "Demonstrate a low-risk action"
+    }
+  ]
+}

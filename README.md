@@ -1,5 +1,8 @@
 # Leos Agent
 
+Leos is not a general autonomous agent. It is a safety-first runtime kernel for
+bounded, auditable agent actions.
+
 Leos Agent is a safety-first autonomous-agent kernel designed around the requirements discussed in the Hamming / Simon / Pearl / Engelbart / Brooks roundtable:
 
 - **Hamming:** every action should be checked, logged, verified, and recoverable where possible.
@@ -13,14 +16,16 @@ This repository starts with a minimal Python runtime that can be extended with L
 ## Core architecture
 
 ```text
-Goal
-  -> Plan
-    -> Policy assessment
-      -> Human approval when needed
-        -> Dry run
-          -> Execute
-            -> Causal verification
-              -> Audit log / memory update / rollback on failure
+User Goal
+  -> Goal Manager
+  -> Planner
+  -> Policy Engine
+  -> Causal Model
+  -> Approval Gate
+  -> Tool Runtime
+  -> Verifier
+  -> Memory
+  -> Audit Log
 ```
 
 The initial implementation includes:

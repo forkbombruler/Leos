@@ -1,0 +1,17 @@
+{
+  "goal": {
+    "description": "Show write denial under conservative policy",
+    "success_criteria": ["write is blocked without approval"],
+    "stop_conditions": ["policy denies or blocks"]
+  },
+  "steps": [
+    {
+      "tool_name": "safe_file_write",
+      "arguments": {
+        "path": "blocked.txt",
+        "content": "This should not be written without approval.\n"
+      },
+      "reason": "Demonstrate policy denial for consequential write"
+    }
+  ]
+}

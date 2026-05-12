@@ -1,0 +1,19 @@
+{
+  "goal": {
+    "description": "Write a file inside the workspace",
+    "success_criteria": ["safe_file_write verifies file_written"],
+    "constraints": ["Do not write outside the configured workspace"],
+    "stop_conditions": ["file write verifies or blocks"]
+  },
+  "steps": [
+    {
+      "tool_name": "safe_file_write",
+      "arguments": {
+        "path": "example.txt",
+        "content": "Hello from a bounded Leos file write.\n"
+      },
+      "reason": "Demonstrate reversible workspace-scoped file writing",
+      "idempotency_key": "example-safe-file-write-v1"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "goal": {
+    "description": "Demonstrate postcondition failure handling",
+    "success_criteria": ["postcondition failure is detected"],
+    "stop_conditions": ["rollback or failure is recorded"]
+  },
+  "steps": [
+    {
+      "tool_name": "echo",
+      "arguments": {
+        "message": "actual"
+      },
+      "reason": "Produce a value that intentionally mismatches the postcondition",
+      "postconditions": [
+        {
+          "variable": "last_echo",
+          "operator": "equals",
+          "value": "expected"
+        }
+      ]
+    }
+  ]
+}

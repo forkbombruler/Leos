@@ -1,0 +1,10 @@
+# Default code ownership for safety-sensitive runtime changes.
+
+* @Leos-byte
+
+src/leos_agent/policy.py @Leos-byte
+src/leos_agent/transactions.py @Leos-byte
+src/leos_agent/audit.py @Leos-byte
+src/leos_agent/tools.py @Leos-byte
+src/leos_agent/sandbox.py @Leos-byte
+tests/redteam/ @Leos-byte

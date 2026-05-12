@@ -17,6 +17,7 @@ from .causal import (
     CounterfactualReview,
     EffectPrediction,
 )
+from .conflicts import Conflict, ConflictDetector, ConflictResolutionPolicy
 from .enums import (
     CompensationStrategy,
     Decision,
@@ -78,10 +79,12 @@ from .plans import (
 from .policy import (
     BUILT_IN_POLICY_PROFILES,
     ApprovalGate,
+    ApprovalRequest,
     CapabilityGrant,
     PolicyEngine,
     PolicyProfile,
     PolicyRule,
+    build_approval_request,
     validate_policy_config,
 )
 from .policy_manifest import (
@@ -107,6 +110,16 @@ from .sandbox import (  # noqa: F401
     SandboxUnavailable,
     WorkspaceSubprocessSandboxRunner,
 )
+from .simulation import (
+    FakeBrowser,
+    FakeCalendar,
+    FakeEmailServer,
+    FakeFileSystem,
+    FakeGitHubRepo,
+    FakePaymentSystem,
+    FakeShell,
+    SimulationEnvironment,
+)
 from .state import TrustLevel, WorldState
 from .task_queue import (
     RetryPolicy,
@@ -126,6 +139,7 @@ from .tools import (
     ToolSpec,
     default_registry,
 )
+from .trace_viewer import render_trace_html
 from .transactions import TransactionManager
 
 __all__ = [
@@ -133,6 +147,7 @@ __all__ = [
     "ActionStep",
     "AgentKernel",
     "ApprovalGate",
+    "ApprovalRequest",
     "AuditEvent",
     "AuditLog",
     "AuditReplayer",
@@ -144,12 +159,22 @@ __all__ = [
     "CausalHypothesis",
     "CausalWorldModel",
     "CompensationStrategy",
+    "Conflict",
+    "ConflictDetector",
+    "ConflictResolutionPolicy",
     "CounterfactualReport",
     "CounterfactualReview",
     "Decision",
     "DryRunFailed",
     "EchoTool",
     "EffectPrediction",
+    "FakeBrowser",
+    "FakeCalendar",
+    "FakeEmailServer",
+    "FakeFileSystem",
+    "FakeGitHubRepo",
+    "FakePaymentSystem",
+    "FakeShell",
     "Goal",
     "GoalStatus",
     "IdempotencyConflict",
@@ -187,6 +212,7 @@ __all__ = [
     "SecretBoundaryViolation",
     "Secret",
     "SecretLeakedToUntrustedTool",
+    "SimulationEnvironment",
     "SignedPolicyManifest",
     "StateCondition",
     "StepStatus",
@@ -208,9 +234,11 @@ __all__ = [
     "WorldState",
     "Watchdog",
     "default_registry",
+    "build_approval_request",
     "load_policy_from_file",
     "manifest_to_json",
     "replay_audit_log",
+    "render_trace_html",
     "sign_policy",
     "validate_policy_config",
     "validate_json_schema",
