@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, validators
@@ -36,6 +38,33 @@ class ToolManifest:
     requires_human_for: Sequence[str] = ()
     rollback_reliability: float = 1.0
     compensation_strategy: CompensationStrategy = CompensationStrategy.NONE
+
+
+TOOL_MANIFEST_SCHEMA: JSONSchema = {
+    "type": "object",
+    "required": ["name", "version", "permissions", "risk", "reversibility", "input_schema"],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "permissions": {
+            "type": "array",
+            "items": {"type": "string", "enum": [permission.value for permission in Permission]},
+        },
+        "risk": {"type": "string", "enum": [risk.value for risk in RiskLevel]},
+        "reversibility": {"type": "string", "enum": [value.value for value in Reversibility]},
+        "input_schema": {"type": "object"},
+        "output_schema": {"type": "object"},
+        "timeout_ms": {"type": "integer", "minimum": 1},
+        "network_access": {"type": "boolean"},
+        "filesystem_scope": {"type": "string"},
+        "secrets_allowed": {"type": "boolean"},
+        "sandbox_policy": {"type": "string", "enum": [policy.value for policy in SandboxPolicy]},
+        "requires_human_for": {"type": "array", "items": {"type": "string"}},
+        "rollback_reliability": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "compensation_strategy": {"type": "string", "enum": [value.value for value in CompensationStrategy]},
+    },
+    "additionalProperties": False,
+}
 
 
 TASK_FILE_SCHEMA: JSONSchema = {
@@ -149,6 +178,43 @@ def _build_validator(schema: Mapping[str, Any]) -> Draft202012Validator:
 
 def validate_task_file(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return validate_json_schema(data, TASK_FILE_SCHEMA)
+
+
+def validate_tool_manifest(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return validate_json_schema(data, TOOL_MANIFEST_SCHEMA)
+
+
+def tool_manifest_from_mapping(data: Mapping[str, Any]) -> ToolManifest:
+    issues = validate_tool_manifest(data)
+    if issues:
+        formatted = "; ".join(f"{issue['path']}: {issue['message']}" for issue in issues)
+        raise ValueError(f"Invalid tool manifest: {formatted}")
+    return ToolManifest(
+        name=str(data["name"]),
+        version=str(data["version"]),
+        permissions=tuple(Permission(value) for value in data["permissions"]),
+        risk=RiskLevel(str(data["risk"])),
+        reversibility=Reversibility(str(data["reversibility"])),
+        input_schema=dict(data["input_schema"]),
+        output_schema=dict(data.get("output_schema", {})),
+        timeout_ms=int(data.get("timeout_ms", 3000)),
+        network_access=bool(data.get("network_access", False)),
+        filesystem_scope=str(data.get("filesystem_scope", "none")),
+        secrets_allowed=bool(data.get("secrets_allowed", False)),
+        sandbox_policy=SandboxPolicy(str(data.get("sandbox_policy", SandboxPolicy.NONE.value))),
+        requires_human_for=tuple(str(value) for value in data.get("requires_human_for", ())),
+        rollback_reliability=float(data.get("rollback_reliability", 1.0)),
+        compensation_strategy=CompensationStrategy(
+            str(data.get("compensation_strategy", CompensationStrategy.NONE.value))
+        ),
+    )
+
+
+def load_tool_manifest_file(path: str | Path) -> ToolManifest:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, Mapping):
+        raise ValueError("Tool manifest must be a JSON object")
+    return tool_manifest_from_mapping(data)
 
 
 def validate_json_schema(instance: Any, schema: Mapping[str, Any]) -> list[dict[str, Any]]:

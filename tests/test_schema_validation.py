@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from leos_agent.errors import LLMOutputValidationError
 from leos_agent.manifest import (
+    load_tool_manifest_file,
+    tool_manifest_from_mapping,
     validate_json_schema,
     validate_task_file,
+    validate_tool_manifest,
 )
 from leos_agent.planner import validate_llm_proposals
 
@@ -164,6 +169,60 @@ class ConditionSchemaTests(unittest.TestCase):
         data = self._task_with_precondition({"variable": "x", "unknown_field": True})
         issues = validate_task_file(data)
         self.assertTrue(len(issues) > 0, f"Expected issues for additional property, got: {issues}")
+
+
+class ToolManifestSchemaTests(unittest.TestCase):
+    def _valid_manifest(self) -> dict:
+        return {
+            "name": "network_fetch",
+            "version": "0.1.0",
+            "permissions": ["network"],
+            "risk": "medium",
+            "reversibility": "irreversible",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+            "network_access": True,
+            "filesystem_scope": "none",
+            "secrets_allowed": False,
+            "sandbox_policy": "none",
+            "requires_human_for": ["external_network"],
+            "rollback_reliability": 1.0,
+            "compensation_strategy": "none",
+        }
+
+    def test_valid_tool_manifest_loads_from_mapping(self) -> None:
+        manifest = tool_manifest_from_mapping(self._valid_manifest())
+
+        self.assertEqual(manifest.name, "network_fetch")
+        self.assertEqual([permission.value for permission in manifest.permissions], ["network"])
+        self.assertTrue(manifest.network_access)
+
+    def test_invalid_tool_manifest_reports_schema_issues(self) -> None:
+        data = self._valid_manifest()
+        data["permissions"] = ["delete_everything"]
+
+        issues = validate_tool_manifest(data)
+
+        self.assertTrue(any(issue["reason"] == "enum" for issue in issues), f"Issues: {issues}")
+
+    def test_tool_manifest_loads_from_json_file(self) -> None:
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tool.json"
+            path.write_text(json.dumps(self._valid_manifest()), encoding="utf-8")
+
+            manifest = load_tool_manifest_file(path)
+
+        self.assertEqual(manifest.name, "network_fetch")
+
+    def test_tool_manifest_file_must_be_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tool.json"
+            path.write_text("[]", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                load_tool_manifest_file(path)
 
 
 if __name__ == "__main__":

@@ -49,7 +49,13 @@ from .errors import (
 )
 from .goals import Goal, ResourceBudget
 from .kernel import AgentKernel
-from .manifest import ToolManifest, validate_json_schema
+from .manifest import (
+    ToolManifest,
+    load_tool_manifest_file,
+    tool_manifest_from_mapping,
+    validate_json_schema,
+    validate_tool_manifest,
+)
 from .memory import MemoryRecord, MemorySensitivity, MemoryStore, MemoryType
 from .model import (  # noqa: F401
     FakeModelClient,
@@ -60,6 +66,7 @@ from .model import (  # noqa: F401
     ModelUsage,
     StructuredOutputError,
 )
+from .network_tools import BrowserReadTool, NetworkFetcher, NetworkFetchResponse, NetworkFetchTool
 from .planner import (  # noqa: F401
     LLMPlannerAdapter,
     Planner,
@@ -152,6 +159,7 @@ __all__ = [
     "AuditLog",
     "AuditReplayer",
     "BUILT_IN_POLICY_PROFILES",
+    "BrowserReadTool",
     "BudgetExceeded",
     "CapabilityGrant",
     "CausalEffect",
@@ -184,6 +192,9 @@ __all__ = [
     "MemorySensitivity",
     "MemoryStore",
     "MemoryType",
+    "NetworkFetcher",
+    "NetworkFetchResponse",
+    "NetworkFetchTool",
     "Permission",
     "PlanCandidate",
     "PlanProposal",
@@ -236,11 +247,14 @@ __all__ = [
     "default_registry",
     "build_approval_request",
     "load_policy_from_file",
+    "load_tool_manifest_file",
     "manifest_to_json",
     "replay_audit_log",
     "render_trace_html",
     "sign_policy",
     "validate_policy_config",
     "validate_json_schema",
+    "tool_manifest_from_mapping",
+    "validate_tool_manifest",
     "verify_policy_manifest",
 ]

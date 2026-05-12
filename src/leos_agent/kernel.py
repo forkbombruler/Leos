@@ -36,6 +36,7 @@ class AgentKernel:
         approval_gate: ApprovalGate | None = None,
         planner_config: PlannerConfig | None = None,
         counterfactual_review: CounterfactualReview | None = None,
+        allow_network_tools: bool = False,
     ) -> None:
         self.registry = registry
         self.policy = policy
@@ -51,6 +52,7 @@ class AgentKernel:
             audit_log=self.audit_log,
             approval_gate=approval_gate,
             counterfactual_review=counterfactual_review,
+            allow_network_tools=allow_network_tools,
         )
 
     def build_plan(self, goal: Goal, steps: Sequence[ActionStep]) -> TransactionPlan:

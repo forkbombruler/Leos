@@ -58,6 +58,7 @@ class TransactionManager:
         audit_log: AuditLog,
         approval_gate: ApprovalGate | None = None,
         counterfactual_review: CounterfactualReview | None = None,
+        allow_network_tools: bool = False,
     ) -> None:
         self.registry = registry
         self.policy = policy
@@ -65,6 +66,7 @@ class TransactionManager:
         self.audit_log = audit_log
         self.approval_gate = approval_gate or ApprovalGate()
         self.counterfactual_review = counterfactual_review or CounterfactualReview(causal_model, audit_log)
+        self.allow_network_tools = allow_network_tools
 
     def execute_plan(self, plan: TransactionPlan, state: WorldState) -> TransactionPlan:
         self.audit_log.record(
@@ -87,7 +89,7 @@ class TransactionManager:
             tool = self.registry.get(step.tool_name)
             self._hydrate_step_metadata(step, tool)
 
-            sandbox_issue = self._enforce_sandbox(tool)
+            sandbox_issue = self._enforce_sandbox(tool, allow_network_tools=self.allow_network_tools)
             if sandbox_issue:
                 step.status = StepStatus.BLOCKED
                 error: LeosError = SandboxViolation(sandbox_issue)
@@ -308,13 +310,13 @@ class TransactionManager:
         return GoalStatus.FAILED
 
     @staticmethod
-    def _enforce_sandbox(tool: Tool) -> str | None:
+    def _enforce_sandbox(tool: Tool, *, allow_network_tools: bool = False) -> str | None:
         policy = tool.spec.sandbox_policy
         if policy is SandboxPolicy.CONTAINER:
             return "container sandbox not available — requires external container runtime"
         if policy is SandboxPolicy.MICROVM:
             return "microvm sandbox not available — requires external microvm runtime"
-        if tool.spec.network_access:
+        if tool.spec.network_access and not allow_network_tools:
             return "network access not allowed in default sandbox"
         if policy is SandboxPolicy.WORKSPACE and tool.spec.filesystem_scope == "none":
             return "workspace sandbox requires filesystem_scope"

@@ -66,6 +66,25 @@ class PublicAPITests(unittest.TestCase):
     def test_core_exports_sandbox_command_dataclass(self) -> None:
         from leos_agent.core import SandboxCommand  # noqa: F401
 
+    def test_core_exports_network_fetch_tool(self) -> None:
+        from leos_agent.core import NetworkFetchTool  # noqa: F401
+
+    def test_core_exports_browser_read_tool(self) -> None:
+        from leos_agent.core import BrowserReadTool  # noqa: F401
+
+    def test_core_exports_tool_manifest_loader(self) -> None:
+        from leos_agent.core import load_tool_manifest_file  # noqa: F401
+
+    def test_package_exports_network_fetch_tool(self) -> None:
+        import leos_agent
+
+        self.assertTrue(hasattr(leos_agent, "NetworkFetchTool"))
+
+    def test_package_exports_browser_read_tool(self) -> None:
+        import leos_agent
+
+        self.assertTrue(hasattr(leos_agent, "BrowserReadTool"))
+
 
 if __name__ == "__main__":
     unittest.main()
