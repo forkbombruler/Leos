@@ -1,0 +1,22 @@
+# Proof Index
+
+Generated: 2026-05-13T10:53:25Z
+
+Commit: 2f038c748989bdd8c326d601b0e8ed5ed338b0df
+
+Branch: main
+
+Dirty worktree: True
+
+Summary: {'total': 11, 'passed': 11, 'failed': 0, 'skipped': 0}
+
+## Documents
+
+- [TEST_RESULTS.md](TEST_RESULTS.md)
+- [SAFETY_EVAL_RESULTS.md](SAFETY_EVAL_RESULTS.md)
+- [COVERAGE_SUMMARY.md](COVERAGE_SUMMARY.md)
+- [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md)
+- [SECURITY_SCAN.md](SECURITY_SCAN.md)
+- [ARCHITECTURE_CLAIMS.md](ARCHITECTURE_CLAIMS.md)
+- [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)
+- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)

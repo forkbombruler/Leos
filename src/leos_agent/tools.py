@@ -81,6 +81,7 @@ class ToolSpec:
     secrets_allowed: bool = False
     sandbox_policy: SandboxPolicy = SandboxPolicy.NONE
     requires_human_for: Sequence[str] = ()
+    causal_contract: Any | None = None
 
     def __post_init__(self) -> None:
         reversibility = self.reversibility

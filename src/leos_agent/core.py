@@ -17,7 +17,16 @@ from .causal import (
     CounterfactualReview,
     EffectPrediction,
 )
+from .causal_contract import CausalContract, safe_file_write_causal_contract
 from .conflicts import Conflict, ConflictDetector, ConflictResolutionPolicy
+from .dev_tools import (
+    GitDiffTool,
+    ListFilesTool,
+    PatchFileTool,
+    ReadFileTool,
+    RunTestsTool,
+    default_dev_registry,
+)
 from .enums import (
     CompensationStrategy,
     Decision,
@@ -47,6 +56,7 @@ from .errors import (
     VerificationFailed,
     WorkspaceEscapeBlocked,
 )
+from .eval_runner import EvalCaseResult, EvalFinding, EvalReport, format_eval_report, run_safety_evals
 from .goals import Goal, ResourceBudget
 from .kernel import AgentKernel
 from .manifest import (
@@ -66,7 +76,7 @@ from .model import (  # noqa: F401
     ModelUsage,
     StructuredOutputError,
 )
-from .network_tools import BrowserReadTool, NetworkFetcher, NetworkFetchResponse, NetworkFetchTool
+from .network_tools import BrowserReadTool, NetworkFetcher, NetworkFetchResponse, NetworkFetchTool, URLSafetyPolicy
 from .planner import (  # noqa: F401
     LLMPlannerAdapter,
     Planner,
@@ -106,9 +116,11 @@ from .prompts import (  # noqa: F401
     PromptRegistry,
     PromptTemplate,
 )
+from .proof import ProofCommandResult, ProofManifest, generate_proofs
 from .replay import AuditReplayer, ReplayResult, replay_audit_log
 from .sandbox import (  # noqa: F401
     ContainerSandboxRunner,
+    DockerSandboxRunner,
     MicroVMSandboxRunner,
     SandboxCommand,
     SandboxCommandTool,
@@ -146,7 +158,7 @@ from .tools import (
     ToolSpec,
     default_registry,
 )
-from .trace_viewer import render_trace_html
+from .trace_viewer import render_trace_html, render_trace_markdown
 from .transactions import TransactionManager
 
 __all__ = [
@@ -166,6 +178,7 @@ __all__ = [
     "CausalGraph",
     "CausalHypothesis",
     "CausalWorldModel",
+    "CausalContract",
     "CompensationStrategy",
     "Conflict",
     "ConflictDetector",
@@ -176,6 +189,9 @@ __all__ = [
     "DryRunFailed",
     "EchoTool",
     "EffectPrediction",
+    "EvalCaseResult",
+    "EvalFinding",
+    "EvalReport",
     "FakeBrowser",
     "FakeCalendar",
     "FakeEmailServer",
@@ -188,6 +204,8 @@ __all__ = [
     "IdempotencyConflict",
     "InvalidGoalTransition",
     "LeosError",
+    "GitDiffTool",
+    "ListFilesTool",
     "MemoryRecord",
     "MemorySensitivity",
     "MemoryStore",
@@ -195,10 +213,12 @@ __all__ = [
     "NetworkFetcher",
     "NetworkFetchResponse",
     "NetworkFetchTool",
+    "URLSafetyPolicy",
     "Permission",
     "PlanCandidate",
     "PlanProposal",
     "PlanScore",
+    "PatchFileTool",
     "Planner",
     "PlannerConfig",
     "PlannerResult",
@@ -210,13 +230,17 @@ __all__ = [
     "PolicyRule",
     "PostconditionFailed",
     "PreconditionFailed",
+    "ProofCommandResult",
+    "ProofManifest",
     "Reversibility",
     "RiskLevel",
     "ReplayResult",
     "ResourceBudget",
+    "ReadFileTool",
     "RetryPolicy",
     "RollbackFailed",
     "RuntimeTask",
+    "RunTestsTool",
     "SafeFileWriteTool",
     "SchemaValidationFailed",
     "Secret",
@@ -245,13 +269,20 @@ __all__ = [
     "WorldState",
     "Watchdog",
     "default_registry",
+    "default_dev_registry",
     "build_approval_request",
+    "DockerSandboxRunner",
+    "format_eval_report",
+    "generate_proofs",
     "load_policy_from_file",
     "load_tool_manifest_file",
     "manifest_to_json",
     "replay_audit_log",
     "render_trace_html",
+    "render_trace_markdown",
+    "run_safety_evals",
     "sign_policy",
+    "safe_file_write_causal_contract",
     "validate_policy_config",
     "validate_json_schema",
     "tool_manifest_from_mapping",

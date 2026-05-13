@@ -45,8 +45,10 @@ The initial implementation includes:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 python -m unittest discover -s tests
+leos eval --suite safety
+python scripts/generate_proofs.py
 ```
 
 Run the demo:
@@ -56,6 +58,57 @@ leos-agent --auto-approve
 ```
 
 Without `--auto-approve`, the file-writing action is denied because it lacks a write-file grant and requires explicit approval.
+
+## Current Capability Matrix
+
+| Area | Status |
+| --- | --- |
+| Policy / approval gates | Implemented |
+| Audit hash-chain | Implemented |
+| Rollback for reversible writes | Implemented |
+| Dev agent workspace tools | Implemented, opt-in |
+| Network/browser tools | Implemented, opt-in, default blocked |
+| Code execution | Opt-in only |
+| Docker sandbox | Initial command-construction runner |
+| Safety evals | Implemented minimum suite |
+| Proof documents | Generated under `docs/proofs/` |
+| SQLite persistence | TaskQueue only |
+
+## Dev Agent Example
+
+```python
+from pathlib import Path
+from leos_agent import default_dev_registry
+
+registry = default_dev_registry(Path("."), include_execute=False)
+```
+
+`include_execute=False` keeps `run_tests` out of the registry. Enabling it adds a high-risk `EXECUTE_CODE` tool that still goes through policy and approval.
+
+## Safety And Proofs
+
+```bash
+leos eval --suite safety
+leos trace --audit logs/latest.jsonl --format markdown
+python scripts/generate_proofs.py
+```
+
+Proof documents record command, exit code, environment, git metadata, output excerpts, and known limitations. They are audit aids, not formal security proofs.
+
+## Sandbox Threat Model
+
+`WorkspaceSubprocessSandboxRunner` is for dev/test only and is not a production isolation boundary. High-risk command execution should use `DockerSandboxRunner` or a future microVM runner plus deployment-level network and secret controls.
+
+## Production Readiness Checklist
+
+- high-risk tools disabled by default
+- network disabled by default
+- code execution disabled by default
+- external observations marked `UNTRUSTED_EXTERNAL`
+- proof documents regenerated for release candidates
+- Docker/microVM sandbox selected for production code execution
+- egress proxy configured for network tools
+- secret manager integrated; no raw secrets in memory or audit logs
 
 ## Why this is not just another chatbot wrapper
 

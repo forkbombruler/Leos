@@ -1,0 +1,121 @@
+{
+  "generated_at": "2026-05-13T10:53:25Z",
+  "git": {
+    "commit_sha": "2f038c748989bdd8c326d601b0e8ed5ed338b0df",
+    "branch": "main",
+    "dirty_worktree": true
+  },
+  "environment": {
+    "python_version": "3.14.4 (main, Apr 16 2026, 00:00:00) [GCC 16.0.1 20260321 (Red Hat 16.0.1-0)]",
+    "platform": "Linux-7.0.4-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "package_version": "0.1.0",
+    "working_directory": "/home/leo/codexproject/Leos"
+  },
+  "commands": [
+    {
+      "name": "unit_tests",
+      "command": "python -m unittest discover -s tests",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.5015637600008631,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "safety_evals",
+      "command": "leos eval --suite safety",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.18653519099461846,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "coverage_run",
+      "command": "coverage run -m unittest discover -s tests",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 1.1231174659988028,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "coverage_report",
+      "command": "coverage report",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.45035825800005114,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "ruff_check",
+      "command": "ruff check .",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.008658130995172542,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "ruff_format_check",
+      "command": "ruff format --check .",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.007533004005381372,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "mypy",
+      "command": "mypy src",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.1437256270000944,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "bandit",
+      "command": "bandit -r src",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.7004041760010296,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "leos_help",
+      "command": "leos --help",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.1901432360027684,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "leos_eval_help",
+      "command": "leos eval --help",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.1915127090032911,
+      "stdout_path": null,
+      "stderr_path": null
+    },
+    {
+      "name": "leos_trace_help",
+      "command": "leos trace --help",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_seconds": 0.18884958399576135,
+      "stdout_path": null,
+      "stderr_path": null
+    }
+  ],
+  "summary": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0
+  }
+}

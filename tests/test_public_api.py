@@ -85,6 +85,12 @@ class PublicAPITests(unittest.TestCase):
 
         self.assertTrue(hasattr(leos_agent, "BrowserReadTool"))
 
+    def test_package_exports_dev_registry_and_eval(self) -> None:
+        import leos_agent
+
+        self.assertTrue(hasattr(leos_agent, "default_dev_registry"))
+        self.assertTrue(hasattr(leos_agent, "run_safety_evals"))
+
 
 if __name__ == "__main__":
     unittest.main()

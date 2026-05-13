@@ -6,7 +6,7 @@ from pathlib import Path
 
 from leos_agent.audit import AuditLog
 from leos_agent.cli import _trace_html
-from leos_agent.trace_viewer import render_trace_html
+from leos_agent.trace_viewer import render_trace_html, render_trace_markdown
 
 
 class TraceViewerTests(unittest.TestCase):
@@ -38,6 +38,16 @@ class TraceViewerTests(unittest.TestCase):
             rendered = output_path.read_text(encoding="utf-8")
             self.assertIn("Test Trace", rendered)
             self.assertIn("goal.created", rendered)
+
+    def test_render_trace_markdown_contains_event_types(self) -> None:
+        rendered = render_trace_markdown(
+            [{"event_type": "step.blocked", "message": "blocked", "payload": {"reason": "policy"}}],
+            title="Trace",
+        )
+
+        self.assertIn("# Trace", rendered)
+        self.assertIn("step.blocked", rendered)
+        self.assertIn("policy", rendered)
 
 
 if __name__ == "__main__":

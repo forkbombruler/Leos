@@ -5,8 +5,9 @@ from __future__ import annotations
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any
 from urllib.parse import urlparse
 
@@ -24,6 +25,55 @@ class NetworkFetchResponse:
 
 
 NetworkFetcher = Callable[[str, float, int], NetworkFetchResponse]
+
+
+@dataclass(frozen=True)
+class URLSafetyPolicy:
+    allowed_domains: tuple[str, ...] = ()
+    denied_domains: tuple[str, ...] = ()
+    max_redirects: int = 0
+    resolve_dns: bool = False
+    blocked_hosts: tuple[str, ...] = field(
+        default_factory=lambda: (
+            "localhost",
+            "metadata.google.internal",
+        )
+    )
+
+    def validate(self, url: str) -> list[str]:
+        parsed = urlparse(url)
+        issues: list[str] = []
+        if parsed.scheme not in {"http", "https"}:
+            issues.append("Only http and https URLs are allowed")
+        if not parsed.netloc:
+            issues.append("URL must include a host")
+        if parsed.username or parsed.password:
+            issues.append("Embedded credentials are not allowed")
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if not host:
+            return issues
+        if host in self.blocked_hosts:
+            issues.append("Blocked local or metadata host")
+        if self.allowed_domains and not _domain_matches(host, self.allowed_domains):
+            issues.append("Host is not in allowed_domains")
+        if self.denied_domains and _domain_matches(host, self.denied_domains):
+            issues.append("Host is in denied_domains")
+        try:
+            ip = ip_address(host)
+        except ValueError:
+            ip = None
+        if ip is not None and _is_blocked_ip(ip):
+            issues.append("Blocked local, private, loopback, link-local, or reserved IP")
+        return issues
+
+
+def _domain_matches(host: str, domains: tuple[str, ...]) -> bool:
+    normalized = tuple(domain.lower().rstrip(".") for domain in domains)
+    return any(host == domain or host.endswith(f".{domain}") for domain in normalized)
+
+
+def _is_blocked_ip(ip: IPv4Address | IPv6Address) -> bool:
+    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
 
 
 class NetworkFetchTool:
@@ -74,8 +124,9 @@ class NetworkFetchTool:
         },
     )
 
-    def __init__(self, fetcher: NetworkFetcher | None = None) -> None:
+    def __init__(self, fetcher: NetworkFetcher | None = None, url_policy: URLSafetyPolicy | None = None) -> None:
         self.fetcher = fetcher or _urllib_fetch
+        self.url_policy = url_policy or URLSafetyPolicy()
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
         schema_issues = self.spec.validate_input(arguments)
@@ -87,11 +138,9 @@ class NetworkFetchTool:
                 error=SchemaValidationFailed("Input schema validation failed"),
             )
         url = str(arguments["url"])
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"}:
-            return ToolResult(False, "Only http and https URLs are allowed")
-        if not parsed.netloc:
-            return ToolResult(False, "URL must include a host")
+        issues = self.url_policy.validate(url)
+        if issues:
+            return ToolResult(False, "; ".join(issues))
         return ToolResult(True, f"Would fetch {url}")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
@@ -168,9 +217,9 @@ class BrowserReadTool:
         },
     )
 
-    def __init__(self, fetcher: NetworkFetcher | None = None) -> None:
+    def __init__(self, fetcher: NetworkFetcher | None = None, url_policy: URLSafetyPolicy | None = None) -> None:
         self.fetcher = fetcher or _urllib_fetch
-        self._fetch_tool = NetworkFetchTool(fetcher=self.fetcher)
+        self._fetch_tool = NetworkFetchTool(fetcher=self.fetcher, url_policy=url_policy)
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
         return self._fetch_tool.dry_run(arguments, state)
