@@ -1,6 +1,6 @@
 # Source Snapshot
 
-Generated: `2026-05-15T08:16:22.388849+00:00`
+Generated: `2026-05-15T10:42:46.233291+00:00`
 
 | Path | SHA256 | Lines | Size | Exists |
 |---|---|---:|---:|---|
@@ -8,7 +8,7 @@ Generated: `2026-05-15T08:16:22.388849+00:00`
 | `src/leos_agent/network_tools.py` | `0e5e9fe62cf612b6bce47140899cf74743e1ba11e89dbc0c13d7e56076f01834` | 311 | 12636 | True |
 | `src/leos_agent/eval_runner.py` | `a6bc59a02fe26a4f5ef65f57daa5e610241b2a2b8ef703f6e9be7f41cb22b6b1` | 330 | 11366 | True |
 | `src/leos_agent/proof.py` | `e671babf03be5e69f0ddc3093c4c85d07674ab4d81a761ba0ab2eb4304502d49` | 615 | 21900 | True |
-| `src/leos_agent/sandbox.py` | `4b76bec9549c105c1b5ff36dca4a48129102a3f18b0e6a88642db665dba33d6a` | 344 | 11629 | True |
+| `src/leos_agent/sandbox.py` | `16cae402c68a06ed78ab0382e0fb613612a57486b02a467c6841fc25f07bef9a` | 352 | 12080 | True |
 | `src/leos_agent/task_queue.py` | `af94e06cf7a3efd2adcf5f9763962adb3700b442a8b5568f52cb114de4c0b412` | 446 | 16904 | True |
 | `src/leos_agent/causal.py` | `65fa034bbbbca2f0e1484e708a3f27cbbdf312f69a99e3953e77393773bdc4d0` | 206 | 7792 | True |
 | `src/leos_agent/causal_contract.py` | `9e980ca22b6cd509e11f6966991916483ade64ed24a26f4a8f50ba9b491714b7` | 79 | 3088 | True |

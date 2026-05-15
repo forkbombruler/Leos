@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,6 +44,21 @@ class ProofGenerationTests(unittest.TestCase):
 
         self.assertEqual(manifest.proof_status, "failed_dirty_worktree")
         self.assertEqual(exit_code_for_manifest(manifest), 2)
+
+    def test_require_clean_dirty_skips_commands_without_running(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch(
+                "leos_agent.proof._git_metadata",
+                return_value={"available": True, "branch": "main", "commit_sha": "abc", "dirty_worktree": True},
+            ),
+            mock.patch("leos_agent.proof.subprocess.run") as run,
+        ):
+            manifest = generate_proofs(Path(tmp), require_clean=True, repo_root=Path.cwd())
+
+        self.assertFalse(run.called)
+        self.assertTrue(manifest.commands)
+        self.assertTrue(all(command.status == "skipped" for command in manifest.commands))
 
     def test_clean_worktree_is_release_grade(self) -> None:
         with (
@@ -92,6 +108,26 @@ class ProofGenerationTests(unittest.TestCase):
 
         self.assertEqual(result.status, "failed")
         self.assertEqual(result.exit_code, 7)
+        self.assertEqual(
+            exit_code_for_manifest(proof.ProofManifest("now", "release_grade", True, False, [], {}, {}, [result])), 1
+        )
+
+    def test_missing_command_is_recorded_as_skipped(self) -> None:
+        with mock.patch("leos_agent.proof.subprocess.run", side_effect=FileNotFoundError("missing binary")):
+            result = proof._run_command("missing", ["missing"], Path.cwd())
+
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("missing binary", result.reason or "")
+
+    def test_timed_out_command_is_recorded_as_failed(self) -> None:
+        timeout = subprocess.TimeoutExpired(["slow"], timeout=1, output=b"token=abc", stderr=b"slow")
+
+        with mock.patch("leos_agent.proof.subprocess.run", side_effect=timeout):
+            result = proof._run_command("slow", ["slow"], Path.cwd())
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.reason, "Command timed out")
+        self.assertNotIn("abc", result.stdout)
 
     def test_output_is_truncated(self) -> None:
         text, truncated = proof._excerpt("x" * (proof.MAX_EXCERPT + 10))

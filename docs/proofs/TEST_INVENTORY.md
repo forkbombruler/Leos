@@ -1,6 +1,6 @@
 # Test Inventory
 
-Generated: `2026-05-15T08:16:22.388849+00:00`
+Generated: `2026-05-15T10:42:46.233291+00:00`
 
 | Path | SHA256 | Lines | Size | Exists |
 |---|---|---:|---:|---|
@@ -17,12 +17,13 @@ Generated: `2026-05-15T08:16:22.388849+00:00`
 | `tests/test_dev_tools.py` | `80d36b3d0375a97bc8219c6d55df4a3b83aa91d9268fd9a16f5202f8521c2624` | 115 | 4251 | True |
 | `tests/test_eval_runner.py` | `b2245cc1c4c362db783e47ebc25c14cb023cdcd6b0cede7f9b810d1de97ae617` | 24 | 738 | True |
 | `tests/test_llm_planner.py` | `bd0eb4bfb938795835a3aeb6827d0c3e0d2be446e4d2b2e4e64b1e10bbce7c45` | 152 | 5998 | True |
-| `tests/test_network_tools.py` | `4a7777d8b50fd3930d5f40ec26cfe01465bf69b59ee7f40d0ccbe9185ef6d200` | 168 | 6817 | True |
-| `tests/test_proof_generation.py` | `36c1ca26a33348f6d47880b2771797de46cec92c6ae6834947a111c8a02bfbad` | 110 | 4562 | True |
+| `tests/test_network_tools.py` | `6aea5286e3b3b9645b12f315390bd71f205d22fc2d2a1493f3312f1f01630a2b` | 185 | 7419 | True |
+| `tests/test_proof_generation.py` | `6d3688c9d0a9905693ec2a3228b5d5026627a4272e006f631ed8287346d92a5e` | 146 | 6270 | True |
 | `tests/test_properties.py` | `c79e170732b4853a1404712a485b85cca756b49ec0e0fe201f9f7080daa0a558` | 173 | 6762 | True |
 | `tests/test_public_api.py` | `0389a005fb8ff602f5d4d454506b86bcbfd9f542fea87b7be60e3d55e68afeeb` | 100 | 3761 | True |
 | `tests/test_replay.py` | `c283dec6fdcdb9857e966d4ea25b1e82ae1f268d12a455e5842afcf7288a94d3` | 117 | 5330 | True |
 | `tests/test_sandbox.py` | `7c79739669533fbf3f66da0f060065776967a3d8fe77676d4f3faf6e32c86cb8` | 165 | 6186 | True |
+| `tests/test_sandbox_docker.py` | `df07664945d4f4b5f9e7969bcb2a1336c9e813469fabb85c45fa97175b134492` | 36 | 1389 | True |
 | `tests/test_schema_validation.py` | `2ebbcbfc0964b2b0038f90e9b076afd77aace18c27c5dcdc82f58d77496860f6` | 229 | 8846 | True |
 | `tests/test_serialization.py` | `9651dac861120406fb8b313c0ae149500f68984f5204b21d4c8689863769aefe` | 120 | 5421 | True |
 | `tests/test_simulation_conflicts.py` | `cb122f66293bc8096ed8f44598da24c521516dc97cfd4c15f14d3a70cfbf6734` | 110 | 4694 | True |

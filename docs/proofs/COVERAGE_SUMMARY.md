@@ -5,7 +5,7 @@
 - Command: `coverage run -m unittest discover -s tests`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `1.198`
+- Duration seconds: `1.246`
 - Truncated: `False`
 
 ### stdout
@@ -91,7 +91,7 @@ Facts: 1 key(s)
   }
 ]
 proof_status=precommit_dirty release_grade=False
-Enqueued: 99b2704c-6176-4094-a603-ee9d364c855d
+Enqueued: a65335dd-060a-4d27-9d7e-11e2d92661ee
 Status: succeeded
 Task file is valid.
 echo: verified risk=low
@@ -103,7 +103,7 @@ echo                  risk=low       rev=irreversible  perm=none
 safe_file_write       risk=medium    rev=reversible    perm=write_files
   Write a UTF-8 file inside the configured workspace root.
 Integrity: FAIL (1 issue(s))
-  [0] event_hash_mismatch: expected=4e00e6a025c133ce5e950a2e151e010980a7d44617836497f0770390ab818b63 observed=2c90c22103df96aad23d3bf03d78e94535b26a265506ed210d01ac61bde51621
+  [0] event_hash_mismatch: expected=6e4fa5437a3e50a3b77c2e93626fb909c47a1da49c33e0288a9724ef6e5a8b7d observed=6911ff07a9d08436f0accca7e8381203fc0e127e70d47bc2d64058a28952568e
 Integrity: OK
 Applied events: 1
 Facts:
@@ -117,9 +117,9 @@ echo: blocked risk=low
 Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
 echo: verified risk=low
 Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
-Signed manifest written to /tmp/tmpjqs9w85w/signed.json
+Signed manifest written to /tmp/tmpc2op13i9/signed.json
 Policy configuration is valid. Signature verified.
-Trace written to /tmp/tmp5lqrlpda/trace.html
+Trace written to /tmp/tmp30wsq2k5/trace.html
 
 ```
 
@@ -138,9 +138,9 @@ Issue: /goal: 'not_an_object' is not of type 'object'
 .Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions
 .Error: file not found: /tmp/nonexistent_policy_test.json
 ....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered
-........................................................................................................................................................................
+..............................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 339 tests in 0.770s
+Ran 345 tests in 0.781s
 
 OK
 
@@ -151,7 +151,7 @@ OK
 - Command: `coverage report`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `0.455`
+- Duration seconds: `0.463`
 - Truncated: `False`
 
 ### stdout
@@ -181,9 +181,9 @@ src/leos_agent/plans.py                86      2      8      3    95%
 src/leos_agent/policy.py              270     47    106     17    80%
 src/leos_agent/policy_manifest.py      51      9     12      5    78%
 src/leos_agent/prompts.py              30      1      2      1    94%
-src/leos_agent/proof.py               216     18     42      6    89%
+src/leos_agent/proof.py               216      9     42      8    93%
 src/leos_agent/replay.py              122     10     80     15    86%
-src/leos_agent/sandbox.py             128     20     30      8    80%
+src/leos_agent/sandbox.py             139     21     34      9    83%
 src/leos_agent/serialization.py        67      1      6      1    97%
 src/leos_agent/simulation.py           65      0      6      1    99%
 src/leos_agent/state.py                39      1     10      3    92%
@@ -192,6 +192,6 @@ src/leos_agent/tools.py               144      7     26      9    91%
 src/leos_agent/trace_viewer.py         29      0      6      0   100%
 src/leos_agent/transactions.py        295     26    114     11    89%
 ---------------------------------------------------------------------
-TOTAL                                3609    469    940    180    83%
+TOTAL                                3620    461    944    183    84%
 
 ```

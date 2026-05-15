@@ -2,9 +2,9 @@
 
 - Proof status: `precommit_dirty`
 - Release grade: `False`
-- Generated at: `2026-05-15T08:16:22.388849+00:00`
-- Commit SHA: `2f038c748989bdd8c326d601b0e8ed5ed338b0df`
-- Branch: `main`
+- Generated at: `2026-05-15T10:42:46.233291+00:00`
+- Commit SHA: `0eb0d023de5ef317197322bd16947c8a80473ac3`
+- Branch: `fix/proof-require-clean`
 - Dirty worktree: `True`
 - Summary: {'total': 12, 'passed': 12, 'failed': 0, 'skipped': 0}
 
