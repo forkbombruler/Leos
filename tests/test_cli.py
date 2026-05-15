@@ -9,8 +9,10 @@ from pathlib import Path
 
 from leos_agent.audit import AuditLog
 from leos_agent.cli import (
+    _eval,
     _inspect_audit,
     _manifest,
+    _proof_generate,
     _queue_demo,
     _validate_task,
 )
@@ -68,6 +70,20 @@ class InspectAuditTests(unittest.TestCase):
 class QueueDemoTests(unittest.TestCase):
     def test_exits_zero(self) -> None:
         self.assertEqual(_queue_demo(), 0)
+
+
+class EvalCliTests(unittest.TestCase):
+    def test_eval_safety_exits_zero(self) -> None:
+        self.assertEqual(_eval("safety", output_format="text"), 0)
+
+
+class ProofCliTests(unittest.TestCase):
+    def test_proof_generate_no_run_writes_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            code = _proof_generate(tmp, require_clean=False, allow_dirty=True, no_run=True)
+
+            self.assertIn(code, {0, 2})
+            self.assertTrue((Path(tmp) / "MANIFEST.json").exists())
 
 
 if __name__ == "__main__":

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import ipaddress
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html.parser import HTMLParser
-from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any
 from urllib.parse import urlparse
 
@@ -29,51 +29,45 @@ NetworkFetcher = Callable[[str, float, int], NetworkFetchResponse]
 
 @dataclass(frozen=True)
 class URLSafetyPolicy:
+    """Default SSRF-oriented URL safety policy for network tools."""
+
     allowed_domains: tuple[str, ...] = ()
     denied_domains: tuple[str, ...] = ()
-    max_redirects: int = 0
     resolve_dns: bool = False
-    blocked_hosts: tuple[str, ...] = field(
-        default_factory=lambda: (
-            "localhost",
-            "metadata.google.internal",
-        )
-    )
+    max_redirects: int = 0
 
-    def validate(self, url: str) -> list[str]:
+    def validate(self, url: str) -> ToolResult:
         parsed = urlparse(url)
-        issues: list[str] = []
         if parsed.scheme not in {"http", "https"}:
-            issues.append("Only http and https URLs are allowed")
-        if not parsed.netloc:
-            issues.append("URL must include a host")
+            return ToolResult(False, "Only http and https URLs are allowed")
+        if not parsed.hostname:
+            return ToolResult(False, "URL must include a host")
         if parsed.username or parsed.password:
-            issues.append("Embedded credentials are not allowed")
-        host = (parsed.hostname or "").lower().rstrip(".")
-        if not host:
-            return issues
-        if host in self.blocked_hosts:
-            issues.append("Blocked local or metadata host")
-        if self.allowed_domains and not _domain_matches(host, self.allowed_domains):
-            issues.append("Host is not in allowed_domains")
-        if self.denied_domains and _domain_matches(host, self.denied_domains):
-            issues.append("Host is in denied_domains")
+            return ToolResult(False, "Embedded credentials are not allowed in URLs")
+
+        host = parsed.hostname.rstrip(".").lower()
+        if self.denied_domains and any(host == d or host.endswith(f".{d}") for d in self.denied_domains):
+            return ToolResult(False, "Domain is denied by URL safety policy")
+        if self.allowed_domains and not any(host == d or host.endswith(f".{d}") for d in self.allowed_domains):
+            return ToolResult(False, "Domain is not in the allowed domain list")
+
+        if host == "localhost":
+            return ToolResult(False, "Localhost URLs are blocked")
         try:
-            ip = ip_address(host)
+            ip = ipaddress.ip_address(host)
         except ValueError:
-            ip = None
-        if ip is not None and _is_blocked_ip(ip):
-            issues.append("Blocked local, private, loopback, link-local, or reserved IP")
-        return issues
-
-
-def _domain_matches(host: str, domains: tuple[str, ...]) -> bool:
-    normalized = tuple(domain.lower().rstrip(".") for domain in domains)
-    return any(host == domain or host.endswith(f".{domain}") for domain in normalized)
-
-
-def _is_blocked_ip(ip: IPv4Address | IPv6Address) -> bool:
-    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+            return ToolResult(True, "URL passed safety policy")
+        if (
+            ip.is_loopback
+            or ip.is_private
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+            or str(ip) == "169.254.169.254"
+        ):
+            return ToolResult(False, "Local, private, link-local, metadata, and reserved IPs are blocked")
+        return ToolResult(True, "URL passed safety policy")
 
 
 class NetworkFetchTool:
@@ -138,9 +132,9 @@ class NetworkFetchTool:
                 error=SchemaValidationFailed("Input schema validation failed"),
             )
         url = str(arguments["url"])
-        issues = self.url_policy.validate(url)
-        if issues:
-            return ToolResult(False, "; ".join(issues))
+        safety = self.url_policy.validate(url)
+        if not safety.ok:
+            return safety
         return ToolResult(True, f"Would fetch {url}")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
@@ -304,7 +298,7 @@ def _parse_html(content: str) -> dict[str, Any]:
 def _urllib_fetch(url: str, timeout: float, max_bytes: int) -> NetworkFetchResponse:
     request = urllib.request.Request(url, headers={"User-Agent": "leos-agent/0.1"})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - scheme checked by tool
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
             raw = response.read(max_bytes + 1)
             content = raw[:max_bytes].decode("utf-8", errors="replace")
             content_type = response.headers.get("content-type", "application/octet-stream")

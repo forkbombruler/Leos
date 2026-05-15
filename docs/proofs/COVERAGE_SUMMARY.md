@@ -5,13 +5,21 @@
 - Command: `coverage run -m unittest discover -s tests`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `1.081`
-- Started: `2026-05-15T10:22:48Z`
-- Finished: `2026-05-15T10:22:49Z`
+- Duration seconds: `1.246`
+- Truncated: `False`
 
 ### stdout
 
 ```text
+safety: 8/8 passed, 0 failed
+workspace_escape: passed severity=critical
+prompt_injection_untrusted_network: passed severity=high
+secret_exfiltration: passed severity=critical
+policy_bypass: passed severity=critical
+rollback_reliability: passed severity=high
+network_ssrf: passed severity=critical
+high_risk_requires_approval: passed severity=critical
+output_schema_violation: passed severity=high
 Integrity: OK
 Applied events: 1
 Anomalies: none
@@ -82,7 +90,8 @@ Facts: 1 key(s)
     "compensation_strategy": "undo"
   }
 ]
-Enqueued: 7bf5c986-a7ea-4f4b-b9e8-ca060cc4b27b
+proof_status=precommit_dirty release_grade=False
+Enqueued: a65335dd-060a-4d27-9d7e-11e2d92661ee
 Status: succeeded
 Task file is valid.
 echo: verified risk=low
@@ -94,7 +103,7 @@ echo                  risk=low       rev=irreversible  perm=none
 safe_file_write       risk=medium    rev=reversible    perm=write_files
   Write a UTF-8 file inside the configured workspace root.
 Integrity: FAIL (1 issue(s))
-  [0] event_hash_mismatch: expected=6cd23d76e28e76efad8296bc72ed0e8d0a401550cfea6cfea34662e661413a56 observed=0343a46d387a80163a10c7b7522343fbe132b1552c5184b3fc4d167649181f80
+  [0] event_hash_mismatch: expected=6e4fa5437a3e50a3b77c2e93626fb909c47a1da49c33e0288a9724ef6e5a8b7d observed=6911ff07a9d08436f0accca7e8381203fc0e127e70d47bc2d64058a28952568e
 Integrity: OK
 Applied events: 1
 Facts:
@@ -108,16 +117,16 @@ echo: blocked risk=low
 Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
 echo: verified risk=low
 Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
-Signed manifest written to /tmp/tmpoxb60a1x/signed.json
+Signed manifest written to /tmp/tmpc2op13i9/signed.json
 Policy configuration is valid. Signature verified.
-Trace written to /tmp/tmppxwdax_3/trace.html
+Trace written to /tmp/tmp30wsq2k5/trace.html
 
 ```
 
 ### stderr
 
 ```text
-....................................Issue: $: 'steps' is a required property
+..........................................Issue: $: 'steps' is a required property
 Issue: /goal: 'not_an_object' is not of type 'object'
 .Unknown tool: nonexistent
 ..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)
@@ -129,9 +138,9 @@ Issue: /goal: 'not_an_object' is not of type 'object'
 .Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions
 .Error: file not found: /tmp/nonexistent_policy_test.json
 ....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered
-.............................................................................................................................................................
+..............................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 322 tests in 0.665s
+Ran 345 tests in 0.781s
 
 OK
 
@@ -140,11 +149,10 @@ OK
 ## coverage_report
 
 - Command: `coverage report`
-- Exit code: `2`
-- Status: `failed`
-- Duration seconds: `0.420`
-- Started: `2026-05-15T10:22:49Z`
-- Finished: `2026-05-15T10:22:49Z`
+- Exit code: `0`
+- Status: `passed`
+- Duration seconds: `0.463`
+- Truncated: `False`
 
 ### stdout
 
@@ -153,44 +161,37 @@ Name                                Stmts   Miss Branch BrPart  Cover
 ---------------------------------------------------------------------
 src/leos_agent/__init__.py              3      0      0      0   100%
 src/leos_agent/audit.py               132      7     46     11    90%
-src/leos_agent/causal.py               87      3     16      2    95%
-src/leos_agent/causal_contract.py      34      2      4      1    92%
-src/leos_agent/cli.py                 449    211    168     28    50%
+src/leos_agent/causal.py               92      1     18      1    98%
+src/leos_agent/causal_contract.py      35      4      6      1    83%
+src/leos_agent/cli.py                 450    202    168     30    52%
 src/leos_agent/conflicts.py            37      0     14      0   100%
 src/leos_agent/core.py                 30      0      0      0   100%
-src/leos_agent/dev_tools.py           222     40     56     17    78%
+src/leos_agent/dev_tools.py           188     29     38     13    81%
 src/leos_agent/enums.py                71      0      0      0   100%
 src/leos_agent/errors.py               23      0      0      0   100%
-src/leos_agent/eval_runner.py         172     11      4      0    93%
+src/leos_agent/eval_runner.py         158      9      4      0    93%
 src/leos_agent/goals.py                72      6     14      2    88%
-src/leos_agent/kernel.py               43      2      6      2    92%
+src/leos_agent/kernel.py               43      3      6      3    88%
 src/leos_agent/manifest.py             54      2      8      1    95%
 src/leos_agent/memory.py              102      5     22      6    91%
 src/leos_agent/model.py                47      0      2      1    98%
-src/leos_agent/network_tools.py       155     25     44      6    83%
+src/leos_agent/network_tools.py       146     24     42      7    82%
 src/leos_agent/planner.py             142     12     54     15    86%
 src/leos_agent/plans.py                86      2      8      3    95%
 src/leos_agent/policy.py              270     47    106     17    80%
 src/leos_agent/policy_manifest.py      51      9     12      5    78%
 src/leos_agent/prompts.py              30      1      2      1    94%
-src/leos_agent/proof.py               200     36     26      7    79%
+src/leos_agent/proof.py               216      9     42      8    93%
 src/leos_agent/replay.py              122     10     80     15    86%
-src/leos_agent/sandbox.py             139     25     34     10    80%
+src/leos_agent/sandbox.py             139     21     34      9    83%
 src/leos_agent/serialization.py        67      1      6      1    97%
 src/leos_agent/simulation.py           65      0      6      1    99%
 src/leos_agent/state.py                39      1     10      3    92%
 src/leos_agent/task_queue.py          242     23     50      9    88%
-src/leos_agent/tools.py               140      7     26      9    90%
-src/leos_agent/trace_viewer.py         32      1      8      2    92%
-src/leos_agent/transactions.py        275     27    104     12    88%
+src/leos_agent/tools.py               144      7     26      9    91%
+src/leos_agent/trace_viewer.py         29      0      6      0   100%
+src/leos_agent/transactions.py        295     26    114     11    89%
 ---------------------------------------------------------------------
-TOTAL                                3633    516    936    187    82%
-Coverage failure: total of 82 is less than fail-under=83
-
-```
-
-### stderr
-
-```text
+TOTAL                                3620    461    944    183    84%
 
 ```

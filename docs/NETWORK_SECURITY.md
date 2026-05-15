@@ -1,11 +1,20 @@
 # Network Security
 
-Network tools are opt-in and are not registered by default.
+Network tools are not registered by default. Runtime execution blocks network
+tools unless `allow_network_tools=True` is explicitly set.
 
-Default URL safety policy blocks localhost, loopback, private, link-local, metadata, credential-bearing, missing-host, and non-HTTP(S) URLs.
+`URLSafetyPolicy` blocks common SSRF targets by default:
 
-`NetworkFetchTool` and `BrowserReadTool` run URL safety checks during dry-run.
+- localhost and loopback addresses
+- private IPv4 ranges
+- link-local and metadata service addresses such as `169.254.169.254`
+- missing hosts
+- embedded username/password URLs
+- non-HTTP(S) schemes
 
-All external content is marked as `untrusted_external` and forbids policy override, credential request, and system instruction use.
+External content returned by `NetworkFetchTool` and `BrowserReadTool` is always
+marked as `UNTRUSTED_EXTERNAL` and includes forbidden uses such as
+`policy_override`, `credential_request`, and `system_instruction`.
 
-Production deployments should still use an egress proxy or network policy enforcement layer. Local URL checks are a guardrail, not a complete network security boundary.
+This policy reduces SSRF risk but does not replace deployment-level egress
+controls, DNS pinning, or proxy enforcement for production deployments.

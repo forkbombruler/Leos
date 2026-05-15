@@ -1,22 +1,35 @@
 # Causal Contracts
 
-Causal contracts are tool-level metadata describing expected action consequences. They complement JSON Schema: schemas validate shapes, while causal contracts describe state effects and verification requirements.
+Causal contracts are tool-level declarations of expected action consequences.
+They complement JSON schemas: schemas validate shape, while causal contracts
+describe expected state effects and required observations.
+
+The built-in `safe_file_write` contract declares:
 
 ```yaml
 tool_name: safe_file_write
-sets: [file_written]
-may_change: [disk_usage]
-side_effects: [filesystem_modified]
-rollback_effects: [restores_previous_file_content]
-required_observations: [file_written]
-without_action: target_file_unchanged
+sets:
+  - file_written
+may_change:
+  - disk_usage
+side_effects:
+  - filesystem_modified
+rollback_effects:
+  - restores_previous_file_content
+required_observations:
+  - file_written
+without_action:
+  file_written: target_file_unchanged
 confidence: 0.9
 ```
 
-Current status:
+Runtime behavior:
 
-- `CausalContract` can generate `ActionConsequence` predictions.
-- `safe_file_write_causal_contract()` provides the built-in example contract.
-- Existing `CausalGraph` and `CausalHypothesis` APIs remain compatible.
+- `CausalGraph.predict_for_tool(step, state, tool=tool)` uses
+  `tool.spec.causal_contract` when present.
+- Legacy `CausalHypothesis` prediction remains supported for older tools.
+- `TransactionManager` checks contract `required_observations` after execution.
+- Missing required observations fail the step, create an audit event, and trigger
+  rollback when a rollback token is available.
 
-Future work includes automatic `ToolSpec.causal_contract` prediction generation and policy profile enforcement for medium+ risk tools.
+This is partial runtime enforcement, not a full structural causal model.

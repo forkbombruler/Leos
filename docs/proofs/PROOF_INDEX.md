@@ -1,25 +1,21 @@
 # Proof Index
 
-Proof status: `release_grade`
-
-Release grade: `True`
-
-Generated: 2026-05-15T10:22:51Z
-
-Commit: 511e69b2a4b873d25480fe49d3ac190aeba038f4
-
-Branch: fix/proof-require-clean
-
-Dirty worktree: False
-
-Summary: {'total': 11, 'passed': 10, 'failed': 1, 'skipped': 0}
+- Proof status: `precommit_dirty`
+- Release grade: `False`
+- Generated at: `2026-05-15T10:42:46.233291+00:00`
+- Commit SHA: `0eb0d023de5ef317197322bd16947c8a80473ac3`
+- Branch: `fix/proof-require-clean`
+- Dirty worktree: `True`
+- Summary: {'total': 12, 'passed': 12, 'failed': 0, 'skipped': 0}
 
 ## Warnings
+- WARNING: This proof was generated from a dirty worktree and is not release-grade evidence.
 
-- none
+**WARNING: This proof was generated from a dirty worktree. It is useful for local review but not release-grade evidence.**
 
 ## Documents
-
+- [SOURCE_SNAPSHOT.md](SOURCE_SNAPSHOT.md)
+- [TEST_INVENTORY.md](TEST_INVENTORY.md)
 - [TEST_RESULTS.md](TEST_RESULTS.md)
 - [SAFETY_EVAL_RESULTS.md](SAFETY_EVAL_RESULTS.md)
 - [COVERAGE_SUMMARY.md](COVERAGE_SUMMARY.md)

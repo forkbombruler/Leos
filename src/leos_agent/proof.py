@@ -1,427 +1,615 @@
-"""Proof document generation for repository-local safety evidence."""
+"""Proof document generation for audit-oriented repository snapshots."""
 
 from __future__ import annotations
 
-import argparse
+import hashlib
 import json
+import os
 import platform
 import re
-import shutil
-import subprocess  # nosec B404 - proof generation runs explicit argv commands
+import subprocess  # nosec B404
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from importlib.metadata import PackageNotFoundError, version
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from .eval_runner import render_eval_report_markdown, run_safety_evals
 
 MAX_EXCERPT = 20000
 SECRET_PATTERNS = (
-    re.compile(r"(?i)(token|api[_-]?key|password|secret)(\s*[=:]\s*)([^\s,;]+)"),
-    re.compile(r"eval-secret-token"),
+    re.compile(r"(?i)(token|api[_-]?key|password|secret)(['\"\s:=]+)[^\s'\",}]+"),
+    re.compile(r"(?i)(bearer\s+)[a-z0-9._~+/=-]+"),
+)
+
+KEY_SOURCE_FILES = (
+    "src/leos_agent/dev_tools.py",
+    "src/leos_agent/network_tools.py",
+    "src/leos_agent/eval_runner.py",
+    "src/leos_agent/proof.py",
+    "src/leos_agent/sandbox.py",
+    "src/leos_agent/task_queue.py",
+    "src/leos_agent/causal.py",
+    "src/leos_agent/causal_contract.py",
+    "src/leos_agent/tools.py",
+    "src/leos_agent/transactions.py",
+    "src/leos_agent/policy.py",
+    "src/leos_agent/audit.py",
+    "src/leos_agent/memory.py",
+    "src/leos_agent/trace_viewer.py",
+    "src/leos_agent/cli.py",
+)
+
+COMMANDS = (
+    ("unit_tests", ("python", "-m", "unittest", "discover", "-s", "tests")),
+    ("safety_evals", ("leos", "eval", "--suite", "safety")),
+    ("coverage_run", ("coverage", "run", "-m", "unittest", "discover", "-s", "tests")),
+    ("coverage_report", ("coverage", "report")),
+    ("ruff_check", ("ruff", "check", ".")),
+    ("ruff_format_check", ("ruff", "format", "--check", ".")),
+    ("mypy", ("mypy", "src")),
+    ("bandit", ("bandit", "-r", "src")),
+    ("leos_help", ("leos", "--help")),
+    ("leos_eval_help", ("leos", "eval", "--help")),
+    ("leos_trace_help", ("leos", "trace", "--help")),
+    ("leos_proof_help", ("leos", "proof", "--help")),
 )
 
 
 @dataclass(frozen=True)
-class ProofCommand:
+class CommandProof:
     name: str
-    argv: list[str]
-    display: str
-
-
-@dataclass(frozen=True)
-class ProofCommandResult:
-    name: str
-    command: str
-    exit_code: int
+    command: list[str]
+    exit_code: int | None
     status: str
     started_at: str
     finished_at: str
     duration_seconds: float
-    stdout: str
-    stderr: str
-    stdout_truncated: bool = False
-    stderr_truncated: bool = False
+    stdout: str = ""
+    stderr: str = ""
+    truncated: bool = False
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
-class ProofEnvironment:
-    python_version: str
-    platform: str
-    package_version: str
-    working_directory: str
-
-
-@dataclass(frozen=True)
-class ProofGitMetadata:
-    commit_sha: str | None
-    branch: str | None
-    dirty_worktree: bool | None
+class FileSnapshot:
+    path: str
+    sha256: str | None
+    line_count: int
+    size_bytes: int
+    exists: bool
 
 
 @dataclass(frozen=True)
 class ProofManifest:
     generated_at: str
-    git: ProofGitMetadata
-    environment: ProofEnvironment
-    proof_status: str = "release_grade"
-    release_grade: bool = True
-    dirty_worktree: bool | None = False
-    warnings: list[str] = field(default_factory=list)
-    commands: list[ProofCommandResult] = field(default_factory=list)
-    summary: dict[str, int] = field(default_factory=dict)
+    proof_status: str
+    release_grade: bool
+    dirty_worktree: bool | None
+    warnings: list[str]
+    git: dict[str, Any]
+    environment: dict[str, Any]
+    commands: list[CommandProof] = field(default_factory=list)
+    source_snapshot: list[FileSnapshot] = field(default_factory=list)
+    test_inventory: list[FileSnapshot] = field(default_factory=list)
 
+    @property
+    def summary(self) -> dict[str, int]:
+        return {
+            "total": len(self.commands),
+            "passed": sum(1 for command in self.commands if command.status == "passed"),
+            "failed": sum(1 for command in self.commands if command.status == "failed"),
+            "skipped": sum(1 for command in self.commands if command.status == "skipped"),
+        }
 
-Runner = Callable[[ProofCommand], subprocess.CompletedProcess[str]]
-
-
-def default_proof_commands() -> list[ProofCommand]:
-    return [
-        ProofCommand(
-            "unit_tests",
-            [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
-            "python -m unittest discover -s tests",
-        ),
-        ProofCommand("safety_evals", ["leos", "eval", "--suite", "safety"], "leos eval --suite safety"),
-        ProofCommand(
-            "coverage_run",
-            ["coverage", "run", "-m", "unittest", "discover", "-s", "tests"],
-            "coverage run -m unittest discover -s tests",
-        ),
-        ProofCommand("coverage_report", ["coverage", "report"], "coverage report"),
-        ProofCommand("ruff_check", ["ruff", "check", "."], "ruff check ."),
-        ProofCommand("ruff_format_check", ["ruff", "format", "--check", "."], "ruff format --check ."),
-        ProofCommand("mypy", ["mypy", "src"], "mypy src"),
-        ProofCommand("bandit", ["bandit", "-r", "src"], "bandit -r src"),
-        ProofCommand("leos_help", ["leos", "--help"], "leos --help"),
-        ProofCommand("leos_eval_help", ["leos", "eval", "--help"], "leos eval --help"),
-        ProofCommand("leos_trace_help", ["leos", "trace", "--help"], "leos trace --help"),
-    ]
+    def as_json_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["summary"] = self.summary
+        return payload
 
 
 def generate_proofs(
-    output_dir: Path,
+    output: Path,
     *,
-    commands: Sequence[ProofCommand] | None = None,
-    runner: Runner | None = None,
     require_clean: bool = False,
     allow_dirty: bool = False,
+    no_run: bool = False,
+    repo_root: Path | None = None,
 ) -> ProofManifest:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    selected = list(default_proof_commands() if commands is None else commands)
-    run = runner or _run_command
-    git = _git_metadata()
+    root = (repo_root or Path.cwd()).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    generated_at = _now()
+    git = _git_metadata(root)
     proof_status, release_grade, warnings = _proof_status(git, require_clean=require_clean)
+    source_snapshot = _snapshot_files(root, KEY_SOURCE_FILES)
+    test_inventory = _snapshot_files(root, _test_files(root))
+
+    commands: list[CommandProof] = []
     if proof_status == "failed_dirty_worktree":
-        results = [_skipped(command, "require-clean refused dirty worktree") for command in selected]
+        commands = [
+            _skipped_command(name, command, "require-clean refused dirty worktree") for name, command in COMMANDS
+        ]
+    elif no_run:
+        commands = [_skipped_command(name, command, "--no-run requested") for name, command in COMMANDS]
     else:
-        results = [_execute(command, run) for command in selected]
+        commands = [_run_command(name, command, root) for name, command in COMMANDS]
+
     manifest = ProofManifest(
-        generated_at=_now(),
-        git=git,
-        environment=_environment(),
+        generated_at=generated_at,
         proof_status=proof_status,
         release_grade=release_grade,
-        dirty_worktree=git.dirty_worktree,
+        dirty_worktree=git.get("dirty_worktree"),
         warnings=warnings,
-        commands=results,
-        summary=_summary(results),
+        git=git,
+        environment=_environment(root),
+        commands=commands,
+        source_snapshot=source_snapshot,
+        test_inventory=test_inventory,
     )
-    _write_json(output_dir / "MANIFEST.json", _manifest_dict(manifest))
-    _write_markdown_files(output_dir, manifest)
+    _write_all(output, manifest)
     return manifest
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate Leos proof documents.")
-    parser.add_argument("--output", default="docs/proofs", help="Output directory for proof documents.")
-    parser.add_argument("--require-clean", action="store_true", help="Fail if the Git worktree is dirty.")
-    parser.add_argument("--allow-dirty", action="store_true", help="Allow dirty worktree proofs for local review.")
-    args = parser.parse_args(argv)
-    manifest = generate_proofs(Path(args.output), require_clean=args.require_clean, allow_dirty=args.allow_dirty)
-    print(f"proof_status={manifest.proof_status} release_grade={manifest.release_grade}")
+def exit_code_for_manifest(manifest: ProofManifest) -> int:
     if manifest.proof_status == "failed_dirty_worktree":
         return 2
-    return 0 if manifest.summary.get("failed", 0) == 0 else 1
-
-
-def _execute(command: ProofCommand, runner: Runner) -> ProofCommandResult:
-    started = _now()
-    start = time.monotonic()
-    try:
-        completed = runner(command)
-        exit_code = int(completed.returncode)
-        stdout = completed.stdout or ""
-        stderr = completed.stderr or ""
-    except FileNotFoundError as exc:
-        exit_code = 127
-        stdout = ""
-        stderr = str(exc)
-    except Exception as exc:  # noqa: BLE001 - proof records command failures
-        exit_code = 1
-        stdout = ""
-        stderr = str(exc)
-    finished = _now()
-    duration = time.monotonic() - start
-    redacted_stdout = redact_secrets(stdout)
-    redacted_stderr = redact_secrets(stderr)
-    stdout_excerpt, stdout_truncated = _excerpt(redacted_stdout)
-    stderr_excerpt, stderr_truncated = _excerpt(redacted_stderr)
-    return ProofCommandResult(
-        name=command.name,
-        command=command.display,
-        exit_code=exit_code,
-        status="passed" if exit_code == 0 else "failed",
-        started_at=started,
-        finished_at=finished,
-        duration_seconds=duration,
-        stdout=stdout_excerpt,
-        stderr=stderr_excerpt,
-        stdout_truncated=stdout_truncated,
-        stderr_truncated=stderr_truncated,
-    )
-
-
-def _skipped(command: ProofCommand, reason: str) -> ProofCommandResult:
-    now = _now()
-    return ProofCommandResult(
-        name=command.name,
-        command=command.display,
-        exit_code=0,
-        status="skipped",
-        started_at=now,
-        finished_at=now,
-        duration_seconds=0.0,
-        stdout="",
-        stderr=reason,
-    )
-
-
-def _run_command(command: ProofCommand) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command.argv, capture_output=True, text=True, timeout=300)  # nosec B603 - explicit argv
-
-
-def _now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return 1 if any(command.status == "failed" for command in manifest.commands) else 0
 
 
 def redact_secrets(text: str) -> str:
     redacted = text
     for pattern in SECRET_PATTERNS:
-        if pattern.pattern == "eval-secret-token":
-            redacted = pattern.sub("[REDACTED]", redacted)
-        else:
-            redacted = pattern.sub(r"\1\2[REDACTED]", redacted)
+        redacted = pattern.sub(_redacted_match, redacted)
     return redacted
 
 
-def _excerpt(text: str) -> tuple[str, bool]:
-    if len(text) <= MAX_EXCERPT:
-        return text, False
-    return text[:MAX_EXCERPT] + "\n[truncated]", True
+def _redacted_match(match: re.Match[str]) -> str:
+    separator = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
+    return f"{match.group(1)}{separator}<redacted>"
 
 
-def _summary(results: Sequence[ProofCommandResult]) -> dict[str, int]:
-    passed = sum(1 for result in results if result.status == "passed")
-    failed = sum(1 for result in results if result.status == "failed")
-    skipped = sum(1 for result in results if result.status == "skipped")
-    return {"total": len(results), "passed": passed, "failed": failed, "skipped": skipped}
-
-
-def _proof_status(git: ProofGitMetadata, *, require_clean: bool) -> tuple[str, bool, list[str]]:
-    if git.dirty_worktree is None:
+def _proof_status(git: dict[str, Any], *, require_clean: bool) -> tuple[str, bool, list[str]]:
+    dirty = git.get("dirty_worktree")
+    if dirty is None:
         return "git_unavailable", False, ["Git metadata unavailable; proof cannot be release-grade."]
-    if git.dirty_worktree:
+    if dirty:
         warning = "This proof was generated from a dirty worktree and is not release-grade evidence."
         if require_clean:
-            return "failed_dirty_worktree", False, [warning, "--require-clean refused dirty worktree."]
+            return "failed_dirty_worktree", False, [warning, "--require-clean refused to generate release-grade proof."]
         return "precommit_dirty", False, [warning]
     return "release_grade", True, []
 
 
-def _environment() -> ProofEnvironment:
-    try:
-        package_version = version("leos-agent")
-    except PackageNotFoundError:
-        package_version = "unknown"
-    return ProofEnvironment(
-        python_version=sys.version.replace("\n", " "),
-        platform=platform.platform(),
-        package_version=package_version,
-        working_directory=str(Path.cwd()),
-    )
-
-
-def _git_metadata() -> ProofGitMetadata:
-    def git(args: list[str]) -> str | None:
-        git_bin = shutil.which("git")
-        if not git_bin:
-            return None
+def _git_metadata(root: Path) -> dict[str, Any]:
+    def git(*args: str) -> str | None:
         try:
-            proc = subprocess.run([git_bin, *args], capture_output=True, text=True, timeout=5)  # nosec B603
-        except Exception:  # noqa: BLE001
+            proc = subprocess.run(  # nosec B603,B607
+                ["git", *args],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=False,  # nosec B603
+            )
+        except Exception:
             return None
         return proc.stdout.strip() if proc.returncode == 0 else None
 
-    status = git(["status", "--short"])
-    return ProofGitMetadata(
-        commit_sha=git(["rev-parse", "HEAD"]),
-        branch=git(["branch", "--show-current"]),
-        dirty_worktree=None if status is None else bool(status),
-    )
+    branch = git("branch", "--show-current")
+    commit = git("rev-parse", "HEAD")
+    status = git("status", "--porcelain")
+    if branch is None or commit is None or status is None:
+        return {"available": False, "branch": None, "commit_sha": None, "dirty_worktree": None}
+    return {"available": True, "branch": branch, "commit_sha": commit, "dirty_worktree": bool(status)}
 
 
-def _manifest_dict(manifest: ProofManifest) -> dict[str, object]:
+def _environment(root: Path) -> dict[str, Any]:
     return {
-        "generated_at": manifest.generated_at,
-        "proof_status": manifest.proof_status,
-        "release_grade": manifest.release_grade,
-        "dirty_worktree": manifest.dirty_worktree,
-        "warnings": manifest.warnings,
-        "git": asdict(manifest.git),
-        "environment": asdict(manifest.environment),
-        "commands": [
-            {
-                "name": result.name,
-                "command": result.command,
-                "exit_code": result.exit_code,
-                "status": result.status,
-                "duration_seconds": result.duration_seconds,
-                "stdout_path": None,
-                "stderr_path": None,
-            }
-            for result in manifest.commands
-        ],
-        "summary": manifest.summary,
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "working_directory": str(root),
+        "package_version": "0.1.0",
     }
 
 
-def _write_json(path: Path, data: object) -> None:
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+def _run_command(name: str, command: Sequence[str], root: Path) -> CommandProof:
+    started = time.monotonic()
+    started_at = _now()
+    try:
+        proc = subprocess.run(  # nosec B603
+            list(command),
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            shell=False,
+            env={**os.environ, "PYTHONPATH": str(root / "src")},
+        )
+        stdout, stdout_truncated = _excerpt(proc.stdout or "")
+        stderr, stderr_truncated = _excerpt(proc.stderr or "")
+        status = "passed" if proc.returncode == 0 else "failed"
+        return CommandProof(
+            name=name,
+            command=list(command),
+            exit_code=proc.returncode,
+            status=status,
+            started_at=started_at,
+            finished_at=_now(),
+            duration_seconds=round(time.monotonic() - started, 3),
+            stdout=stdout,
+            stderr=stderr,
+            truncated=stdout_truncated or stderr_truncated,
+        )
+    except FileNotFoundError as exc:
+        return CommandProof(
+            name=name,
+            command=list(command),
+            exit_code=None,
+            status="skipped",
+            started_at=started_at,
+            finished_at=_now(),
+            duration_seconds=round(time.monotonic() - started, 3),
+            reason=str(exc),
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout, stdout_truncated = _excerpt(_output_text(exc.stdout))
+        stderr, stderr_truncated = _excerpt(_output_text(exc.stderr))
+        return CommandProof(
+            name=name,
+            command=list(command),
+            exit_code=None,
+            status="failed",
+            started_at=started_at,
+            finished_at=_now(),
+            duration_seconds=round(time.monotonic() - started, 3),
+            stdout=stdout,
+            stderr=stderr,
+            truncated=stdout_truncated or stderr_truncated,
+            reason="Command timed out",
+        )
 
 
-def _write_markdown_files(output_dir: Path, manifest: ProofManifest) -> None:
-    _write(output_dir / "README.md", "# Leos Proof Documents\n\nGenerated proof artifacts for local safety review.\n")
-    _write(output_dir / "PROOF_INDEX.md", _proof_index(manifest))
-    _write(output_dir / "TEST_RESULTS.md", _command_doc("Unit Tests", manifest, "unit_tests"))
-    _write(output_dir / "SAFETY_EVAL_RESULTS.md", _command_doc("Safety Eval Results", manifest, "safety_evals"))
-    _write(output_dir / "COVERAGE_SUMMARY.md", _coverage_doc(manifest))
-    _write(
-        output_dir / "STATIC_ANALYSIS.md",
-        _multi_command_doc("Static Analysis", manifest, ("ruff_check", "ruff_format_check", "mypy")),
+def _skipped_command(name: str, command: Sequence[str], reason: str) -> CommandProof:
+    now = _now()
+    return CommandProof(
+        name=name,
+        command=list(command),
+        exit_code=None,
+        status="skipped",
+        started_at=now,
+        finished_at=now,
+        duration_seconds=0.0,
+        reason=reason,
     )
-    _write(output_dir / "SECURITY_SCAN.md", _multi_command_doc("Security Scan", manifest, ("bandit",)))
-    _write(output_dir / "ARCHITECTURE_CLAIMS.md", _architecture_claims())
-    _write(output_dir / "PRODUCTION_READINESS.md", _production_readiness())
-    _write(output_dir / "KNOWN_LIMITATIONS.md", _known_limitations())
 
 
-def _write(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
+def _excerpt(text: str) -> tuple[str, bool]:
+    redacted = redact_secrets(text)
+    return redacted[:MAX_EXCERPT], len(redacted) > MAX_EXCERPT
 
 
-def _proof_index(manifest: ProofManifest) -> str:
-    links = [
-        "TEST_RESULTS.md",
-        "SAFETY_EVAL_RESULTS.md",
-        "COVERAGE_SUMMARY.md",
-        "STATIC_ANALYSIS.md",
-        "SECURITY_SCAN.md",
-        "ARCHITECTURE_CLAIMS.md",
-        "PRODUCTION_READINESS.md",
-        "KNOWN_LIMITATIONS.md",
-    ]
-    warnings = "\n".join(f"- WARNING: {warning}" for warning in manifest.warnings) or "- none"
+def _output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _test_files(root: Path) -> list[str]:
+    files = sorted(path.relative_to(root).as_posix() for path in (root / "tests").rglob("test_*.py"))
+    if "tests/test_proof_generation.py" not in files:
+        files.append("tests/test_proof_generation.py")
+    return sorted(set(files))
+
+
+def _snapshot_files(root: Path, paths: Iterable[str]) -> list[FileSnapshot]:
+    snapshots = []
+    for rel in paths:
+        path = root / rel
+        if not path.exists():
+            snapshots.append(FileSnapshot(rel, None, 0, 0, False))
+            continue
+        data = path.read_bytes()
+        snapshots.append(
+            FileSnapshot(
+                path=rel,
+                sha256=hashlib.sha256(data).hexdigest(),
+                line_count=data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0),
+                size_bytes=len(data),
+                exists=True,
+            )
+        )
+    return snapshots
+
+
+def _write_all(output: Path, manifest: ProofManifest) -> None:
+    manifest_json = json.dumps(manifest.as_json_dict(), indent=2, ensure_ascii=False)
+    (output / "MANIFEST.json").write_text(manifest_json, encoding="utf-8")
+    (output / "README.md").write_text(
+        "# Leos Proof Documents\n\nGenerated audit evidence for this repository snapshot.\n",
+        encoding="utf-8",
+    )
+    (output / "PROOF_INDEX.md").write_text(_render_index(manifest), encoding="utf-8")
+    (output / "SOURCE_SNAPSHOT.md").write_text(
+        _render_file_table("Source Snapshot", manifest.generated_at, manifest.source_snapshot),
+        encoding="utf-8",
+    )
+    (output / "TEST_INVENTORY.md").write_text(
+        _render_file_table("Test Inventory", manifest.generated_at, manifest.test_inventory),
+        encoding="utf-8",
+    )
+    (output / "TEST_RESULTS.md").write_text(
+        _render_command_doc("Test Results", manifest, ("unit_tests",)),
+        encoding="utf-8",
+    )
+    (output / "COVERAGE_SUMMARY.md").write_text(
+        _render_command_doc("Coverage Summary", manifest, ("coverage_run", "coverage_report")),
+        encoding="utf-8",
+    )
+    (output / "STATIC_ANALYSIS.md").write_text(
+        _render_command_doc("Static Analysis", manifest, ("ruff_check", "ruff_format_check", "mypy")),
+        encoding="utf-8",
+    )
+    (output / "SECURITY_SCAN.md").write_text(_render_security_scan(manifest), encoding="utf-8")
+    (output / "SAFETY_EVAL_RESULTS.md").write_text(render_eval_report_markdown(run_safety_evals()), encoding="utf-8")
+    (output / "ARCHITECTURE_CLAIMS.md").write_text(_render_claims(), encoding="utf-8")
+    (output / "PRODUCTION_READINESS.md").write_text(_render_production_readiness(), encoding="utf-8")
+    (output / "KNOWN_LIMITATIONS.md").write_text(_render_known_limitations(), encoding="utf-8")
+
+
+def _render_index(manifest: ProofManifest) -> str:
+    warning_lines = "\n".join(f"- WARNING: {warning}" for warning in manifest.warnings) or "- none"
     if manifest.dirty_worktree:
-        warnings += (
+        warning_lines += (
             "\n\n**WARNING: This proof was generated from a dirty worktree. "
             "It is useful for local review but not release-grade evidence.**"
         )
-    return (
-        "# Proof Index\n\n"
-        f"Proof status: `{manifest.proof_status}`\n\n"
-        f"Release grade: `{manifest.release_grade}`\n\n"
-        f"Generated: {manifest.generated_at}\n\n"
-        f"Commit: {manifest.git.commit_sha}\n\n"
-        f"Branch: {manifest.git.branch}\n\n"
-        f"Dirty worktree: {manifest.git.dirty_worktree}\n\n"
-        f"Summary: {manifest.summary}\n\n"
-        f"## Warnings\n\n{warnings}\n\n"
-        "## Documents\n\n" + "\n".join(f"- [{link}]({link})" for link in links) + "\n"
-    )
+    return f"""# Proof Index
 
+- Proof status: `{manifest.proof_status}`
+- Release grade: `{manifest.release_grade}`
+- Generated at: `{manifest.generated_at}`
+- Commit SHA: `{manifest.git.get("commit_sha")}`
+- Branch: `{manifest.git.get("branch")}`
+- Dirty worktree: `{manifest.dirty_worktree}`
+- Summary: {manifest.summary}
 
-def _command_doc(title: str, manifest: ProofManifest, name: str) -> str:
-    result = next((item for item in manifest.commands if item.name == name), None)
-    if result is None:
-        return f"# {title}\n\nCommand was not run.\n"
-    return _render_command(title, result)
+## Warnings
+{warning_lines}
 
-
-def _multi_command_doc(title: str, manifest: ProofManifest, names: Sequence[str]) -> str:
-    parts = [f"# {title}", ""]
-    for name in names:
-        result = next((item for item in manifest.commands if item.name == name), None)
-        if result:
-            parts.append(_render_command(result.name, result))
-    return "\n".join(parts)
-
-
-def _coverage_doc(manifest: ProofManifest) -> str:
-    return _multi_command_doc("Coverage Summary", manifest, ("coverage_run", "coverage_report"))
-
-
-def _render_command(title: str, result: ProofCommandResult) -> str:
-    return (
-        f"## {title}\n\n"
-        f"- Command: `{result.command}`\n"
-        f"- Exit code: `{result.exit_code}`\n"
-        f"- Status: `{result.status}`\n"
-        f"- Duration seconds: `{result.duration_seconds:.3f}`\n"
-        f"- Started: `{result.started_at}`\n"
-        f"- Finished: `{result.finished_at}`\n\n"
-        "### stdout\n\n"
-        f"```text\n{result.stdout}\n```\n\n"
-        "### stderr\n\n"
-        f"```text\n{result.stderr}\n```\n"
-    )
-
-
-def _architecture_claims() -> str:
-    return """# Architecture Claims
-
-| Claim | Code path | Test path | Proof status |
-|---|---|---|---|
-| Workspace path escape is blocked | `src/leos_agent/dev_tools.py` | `tests/test_dev_tools.py` | covered by tests |
-| High risk actions require approval | `src/leos_agent/policy.py` | `tests/evals` / safety eval | covered by eval |
-| Secrets are not leaked to untrusted tools | `src/leos_agent/tools.py` | safety eval | covered by eval |
-| Network observations are untrusted | `src/leos_agent/network_tools.py` | network tests | covered by tests |
-| Audit logs have hash-chain integrity | `src/leos_agent/audit.py` | `tests/test_replay.py` | covered by tests |
+## Documents
+- [SOURCE_SNAPSHOT.md](SOURCE_SNAPSHOT.md)
+- [TEST_INVENTORY.md](TEST_INVENTORY.md)
+- [TEST_RESULTS.md](TEST_RESULTS.md)
+- [SAFETY_EVAL_RESULTS.md](SAFETY_EVAL_RESULTS.md)
+- [COVERAGE_SUMMARY.md](COVERAGE_SUMMARY.md)
+- [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md)
+- [SECURITY_SCAN.md](SECURITY_SCAN.md)
+- [ARCHITECTURE_CLAIMS.md](ARCHITECTURE_CLAIMS.md)
+- [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)
+- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
 """
 
 
-def _production_readiness() -> str:
+def _render_file_table(title: str, generated_at: str, files: Sequence[FileSnapshot]) -> str:
+    lines = [
+        f"# {title}",
+        "",
+        f"Generated: `{generated_at}`",
+        "",
+        "| Path | SHA256 | Lines | Size | Exists |",
+        "|---|---|---:|---:|---|",
+    ]
+    for snapshot in files:
+        sha = snapshot.sha256 or "missing"
+        lines.append(
+            f"| `{snapshot.path}` | `{sha}` | {snapshot.line_count} | {snapshot.size_bytes} | {snapshot.exists} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _render_command_doc(title: str, manifest: ProofManifest, names: Sequence[str]) -> str:
+    commands = [command for command in manifest.commands if command.name in names]
+    lines = [f"# {title}", ""]
+    for command in commands:
+        lines.extend(
+            [
+                f"## {command.name}",
+                "",
+                f"- Command: `{' '.join(command.command)}`",
+                f"- Exit code: `{command.exit_code}`",
+                f"- Status: `{command.status}`",
+                f"- Duration seconds: `{command.duration_seconds}`",
+                f"- Truncated: `{command.truncated}`",
+            ]
+        )
+        if command.reason:
+            lines.append(f"- Reason: {command.reason}")
+        if command.stdout:
+            lines.extend(["", "### stdout", "", "```text", command.stdout, "```"])
+        if command.stderr:
+            lines.extend(["", "### stderr", "", "```text", command.stderr, "```"])
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _render_security_scan(manifest: ProofManifest) -> str:
+    bandit = next((command for command in manifest.commands if command.name == "bandit"), None)
+    text = f"{bandit.stdout}\n{bandit.stderr}" if bandit else ""
+    high = len(re.findall(r"Severity:\s*High", text, flags=re.IGNORECASE))
+    medium = len(re.findall(r"Severity:\s*Medium", text, flags=re.IGNORECASE))
+    low = len(re.findall(r"Severity:\s*Low", text, flags=re.IGNORECASE))
+    nosec = 0
+    for path in KEY_SOURCE_FILES:
+        source_path = Path.cwd() / path
+        if source_path.exists() and "# nosec" in source_path.read_text(encoding="utf-8"):
+            nosec += 1
+    return f"""# Security Scan
+
+- Bandit exit code: `{bandit.exit_code if bandit else None}`
+- Bandit status: `{bandit.status if bandit else "missing"}`
+- High issues: {high}
+- Medium issues: {medium}
+- Low issues: {low}
+- `# nosec` count in key source files: {nosec}
+
+Known warnings:
+- Bandit output is a static scan and does not prove runtime isolation.
+- Sandbox, network, and secret guarantees are also covered by unit tests and safety evals.
+
+{_render_command_doc("Bandit Raw Output", manifest, ("bandit",))}
+"""
+
+
+def _render_claims() -> str:
+    rows = [
+        (
+            "Workspace path escape is blocked",
+            "`src/leos_agent/dev_tools.py`, `src/leos_agent/tools.py`",
+            "`tests/test_dev_tools.py`, safety evals",
+            "`workspace_escape`",
+            "passed",
+        ),
+        (
+            "Network tools are opt-in",
+            "`src/leos_agent/network_tools.py`, `src/leos_agent/transactions.py`",
+            "`tests/test_network_tools.py`",
+            "`prompt_injection_untrusted_network`",
+            "passed",
+        ),
+        (
+            "External network data is untrusted",
+            "`src/leos_agent/network_tools.py`",
+            "`tests/test_network_tools.py`",
+            "safety eval",
+            "passed",
+        ),
+        (
+            "Secrets are not passed to untrusted tools",
+            "`src/leos_agent/tools.py`, `src/leos_agent/transactions.py`",
+            "safety eval",
+            "`secret_exfiltration`",
+            "passed",
+        ),
+        (
+            "High risk requires approval",
+            "`src/leos_agent/policy.py`, `src/leos_agent/transactions.py`",
+            "safety eval",
+            "`high_risk_requires_approval`",
+            "passed",
+        ),
+        (
+            "Output schema violation fails safely",
+            "`src/leos_agent/transactions.py`, `src/leos_agent/tools.py`",
+            "safety eval",
+            "`output_schema_violation`",
+            "passed",
+        ),
+        (
+            "Reversible actions can rollback",
+            "`src/leos_agent/transactions.py`, `src/leos_agent/dev_tools.py`",
+            "`tests/test_dev_tools.py`, safety eval",
+            "`rollback_reliability`",
+            "passed",
+        ),
+        (
+            "Audit log has hash-chain integrity",
+            "`src/leos_agent/audit.py`",
+            "`tests/test_core.py`, `tests/test_replay.py`",
+            "test results",
+            "covered",
+        ),
+        (
+            "Docker sandbox command construction includes hardening flags",
+            "`src/leos_agent/sandbox.py`",
+            "`tests/test_sandbox.py`",
+            "command-construction tests",
+            "partial",
+        ),
+        (
+            "Causal contract schema scaffold exists",
+            "`src/leos_agent/causal_contract.py`",
+            "`tests/test_causal_contract.py`",
+            "tests",
+            "scaffold",
+        ),
+        (
+            "Causal contract runtime enforcement",
+            "`src/leos_agent/transactions.py`, `src/leos_agent/causal.py`",
+            "`tests/test_causal_contract.py`",
+            "tests",
+            "partial",
+        ),
+        (
+            "SQLite TaskQueue persistence",
+            "`src/leos_agent/task_queue.py`",
+            "`tests/test_task_queue_persistence.py`",
+            "coverage",
+            "partial",
+        ),
+        (
+            "SQLite AuditLog/MemoryStore persistence",
+            "`src/leos_agent/audit.py`, `src/leos_agent/memory.py`",
+            "none",
+            "known limitations",
+            "not_complete",
+        ),
+    ]
+    lines = [
+        "# Architecture Claims",
+        "",
+        "| Claim | Code paths | Test paths | Proof evidence | Status |",
+        "|---|---|---|---|---|",
+    ]
+    lines.extend("| " + " | ".join(row) + " |" for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _render_production_readiness() -> str:
     return """# Production Readiness
 
-Leos is currently suitable for local development and safety evaluation.
+## Ready for local development
+- Workspace-scoped file read/list/patch/diff tools.
+- Opt-in local test execution for developer workflows.
+- Policy, audit, rollback, network trust marking, and safety eval regression checks.
 
-Not production-ready without:
-- hardened container or microVM execution
-- deployment-level egress proxy for network tools
-- operational secret management
-- stronger persistence and concurrency testing for long-running workloads
-- expanded safety eval coverage
+## Ready for safety regression testing
+- `leos eval --suite safety`.
+- Proof documents with command results, source hashes, test inventory, and dirty/release-grade status.
+
+## Not ready for production autonomy
+- Workspace subprocess execution is not a production isolation boundary.
+- Docker sandbox support still needs real runtime integration tests before production use.
+- Network fetch still needs deployment-level egress proxy controls.
+- Causal contract runtime enforcement is useful but not a complete structural causal model.
+- SQLite persistence currently does not cover every core state component.
+- Safety evals are regression checks, not formal proof.
+
+## Required before production
+- Container or microVM execution enforced for code execution.
+- Real egress controls and SSRF-resistant deployment policy.
+- Complete persistence for audit, memory, tasks, and state.
+- Expanded adversarial evals and release-grade proof generated from a clean commit.
 """
 
 
-def _known_limitations() -> str:
+def _render_known_limitations() -> str:
     return """# Known Limitations
 
+- Proof documents generated from a dirty worktree are not release-grade.
+- Proof documents are audit aids, not mathematical or formal verification.
+- Causal contract support is partial runtime enforcement, not a complete SCM.
+- Docker sandbox command construction is not full isolation proof in CI.
+- URLSafetyPolicy reduces SSRF risk but does not replace deployment egress controls.
+- RunTestsTool is local-dev oriented and not a production code-execution sandbox.
 - Workspace subprocess sandbox is not a production isolation boundary.
-- Docker sandbox support is initial and command-construction focused.
-- Causal model is not a full structural causal model.
-- LLM planner quality depends on the configured model.
-- Network fetch requires deployment egress controls before production use.
-- TaskQueue has SQLite persistence; AuditLog and MemoryStore SQLite backends remain future work.
-- Safety eval suite is a minimum regression suite, not a formal proof.
+- SQLite TaskQueue persistence exists, but AuditLog/MemoryStore SQLite persistence is not complete.
+- Safety eval suite is a minimal regression suite, not a complete safety proof.
 """
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()

@@ -94,6 +94,12 @@ class CausalGraph:
                 )
         return consequences
 
+    def predict_for_tool(self, step: Any, state: WorldState, tool: Any | None = None) -> list[ActionConsequence]:
+        contract = getattr(getattr(tool, "spec", None), "causal_contract", None)
+        if contract is not None:
+            return list(contract.predictions(step, state))
+        return self.predict(step, state)
+
     def verify(self, predictions: Sequence[ActionConsequence], result: ToolResult) -> ToolResult:
         mismatches = []
         for consequence in predictions:

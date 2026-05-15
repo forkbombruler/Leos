@@ -177,37 +177,43 @@ class EchoTool:
 class SafeFileWriteTool:
     """A reversible file writer constrained to a workspace root."""
 
-    spec = ToolSpec(
-        name="safe_file_write",
-        description="Write a UTF-8 file inside the configured workspace root.",
-        permissions=(Permission.WRITE_FILES,),
-        default_risk=RiskLevel.MEDIUM,
-        reversible=True,
-        reversibility=Reversibility.REVERSIBLE,
-        compensation_strategy=CompensationStrategy.UNDO,
-        input_schema={
-            "type": "object",
-            "required": ["path", "content"],
-            "properties": {
-                "path": {"type": "string"},
-                "content": {"type": "string"},
-                "file_written": {"type": "string"},
+    @staticmethod
+    def _spec() -> ToolSpec:
+        from .causal_contract import safe_file_write_causal_contract
+
+        return ToolSpec(
+            name="safe_file_write",
+            description="Write a UTF-8 file inside the configured workspace root.",
+            permissions=(Permission.WRITE_FILES,),
+            default_risk=RiskLevel.MEDIUM,
+            reversible=True,
+            reversibility=Reversibility.REVERSIBLE,
+            compensation_strategy=CompensationStrategy.UNDO,
+            input_schema={
+                "type": "object",
+                "required": ["path", "content"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "file_written": {"type": "string"},
+                },
+                "additionalProperties": True,
             },
-            "additionalProperties": True,
-        },
-        output_schema={
-            "type": "object",
-            "properties": {
-                "file_written": {"type": "string"},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "file_written": {"type": "string"},
+                },
+                "additionalProperties": True,
             },
-            "additionalProperties": True,
-        },
-        filesystem_scope="workspace",
-        sandbox_policy=SandboxPolicy.WORKSPACE,
-        requires_human_for=("outside_workspace",),
-    )
+            filesystem_scope="workspace",
+            sandbox_policy=SandboxPolicy.WORKSPACE,
+            requires_human_for=("outside_workspace",),
+            causal_contract=safe_file_write_causal_contract(),
+        )
 
     def __init__(self, workspace_root: Path) -> None:
+        self.spec = self._spec()
         self.workspace_root = workspace_root.resolve()
         self.workspace_root.mkdir(parents=True, exist_ok=True)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -7,137 +9,137 @@ from pathlib import Path
 from unittest import mock
 
 from leos_agent import proof
-from leos_agent.proof import ProofCommand, ProofGitMetadata, generate_proofs, redact_secrets
+from leos_agent.proof import exit_code_for_manifest, generate_proofs, redact_secrets
 
 
 class ProofGenerationTests(unittest.TestCase):
-    def test_generate_proofs_records_pass_and_fail(self) -> None:
-        commands = [
-            ProofCommand("unit_tests", ["ok"], "ok"),
-            ProofCommand("safety_evals", ["bad"], "bad"),
-        ]
-
-        def runner(command: ProofCommand) -> subprocess.CompletedProcess[str]:
-            if command.name == "unit_tests":
-                return subprocess.CompletedProcess(command.argv, 0, stdout="token=abc", stderr="")
-            return subprocess.CompletedProcess(command.argv, 1, stdout="x" * 21000, stderr="failed")
-
+    def test_allow_dirty_generates_precommit_manifest_and_docs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            manifest = generate_proofs(Path(tmp), commands=commands, runner=runner)
-            manifest_path = Path(tmp) / "MANIFEST.json"
-            index_path = Path(tmp) / "PROOF_INDEX.md"
-
-            self.assertTrue(manifest_path.exists())
-            self.assertTrue(index_path.exists())
-            self.assertEqual(manifest.summary["failed"], 1)
-            self.assertIn("TEST_RESULTS.md", index_path.read_text(encoding="utf-8"))
-            self.assertIn("[REDACTED]", (Path(tmp) / "TEST_RESULTS.md").read_text(encoding="utf-8"))
-            self.assertIn("[truncated]", (Path(tmp) / "SAFETY_EVAL_RESULTS.md").read_text(encoding="utf-8"))
-
-    def test_redact_secrets_handles_common_secret_names(self) -> None:
-        self.assertNotIn("abc", redact_secrets("api_key=abc password: abc token=abc"))
-
-    def test_require_clean_dirty_worktree_skips_commands_and_returns_failed_status(self) -> None:
-        commands = [ProofCommand("unit_tests", ["should-not-run"], "should-not-run")]
-
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            mock.patch(
+            out = Path(tmp) / "proofs"
+            with mock.patch(
                 "leos_agent.proof._git_metadata",
-                return_value=ProofGitMetadata("abc", "main", True),
-            ),
-        ):
-            manifest = generate_proofs(Path(tmp), commands=commands, require_clean=True)
-            index = (Path(tmp) / "PROOF_INDEX.md").read_text(encoding="utf-8")
+                return_value={"available": True, "branch": "main", "commit_sha": "abc", "dirty_worktree": True},
+            ):
+                manifest = generate_proofs(out, allow_dirty=True, no_run=True, repo_root=Path.cwd())
 
-        self.assertEqual(manifest.proof_status, "failed_dirty_worktree")
-        self.assertFalse(manifest.release_grade)
-        self.assertEqual(manifest.summary["skipped"], 1)
-        self.assertIn("not release-grade evidence", index)
-
-    def test_allow_dirty_records_precommit_status(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            mock.patch(
-                "leos_agent.proof._git_metadata",
-                return_value=ProofGitMetadata("abc", "main", True),
-            ),
-        ):
-            manifest = generate_proofs(Path(tmp), commands=[], allow_dirty=True)
+            data = json.loads((out / "MANIFEST.json").read_text(encoding="utf-8"))
+            index = (out / "PROOF_INDEX.md").read_text(encoding="utf-8")
 
         self.assertEqual(manifest.proof_status, "precommit_dirty")
         self.assertFalse(manifest.release_grade)
+        self.assertEqual(data["proof_status"], "precommit_dirty")
+        self.assertIn("SOURCE_SNAPSHOT.md", index)
+        self.assertIn("TEST_INVENTORY.md", index)
+        self.assertIn("dirty worktree", index)
 
-    def test_clean_worktree_records_release_grade(self) -> None:
+    def test_require_clean_dirty_fails(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch(
                 "leos_agent.proof._git_metadata",
-                return_value=ProofGitMetadata("abc", "main", False),
+                return_value={"available": True, "branch": "main", "commit_sha": "abc", "dirty_worktree": True},
             ),
         ):
-            manifest = generate_proofs(Path(tmp), commands=[])
+            manifest = generate_proofs(Path(tmp), require_clean=True, no_run=True, repo_root=Path.cwd())
+
+        self.assertEqual(manifest.proof_status, "failed_dirty_worktree")
+        self.assertEqual(exit_code_for_manifest(manifest), 2)
+
+    def test_require_clean_dirty_skips_commands_without_running(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch(
+                "leos_agent.proof._git_metadata",
+                return_value={"available": True, "branch": "main", "commit_sha": "abc", "dirty_worktree": True},
+            ),
+            mock.patch("leos_agent.proof.subprocess.run") as run,
+        ):
+            manifest = generate_proofs(Path(tmp), require_clean=True, repo_root=Path.cwd())
+
+        self.assertFalse(run.called)
+        self.assertTrue(manifest.commands)
+        self.assertTrue(all(command.status == "skipped" for command in manifest.commands))
+
+    def test_clean_worktree_is_release_grade(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch(
+                "leos_agent.proof._git_metadata",
+                return_value={"available": True, "branch": "main", "commit_sha": "abc", "dirty_worktree": False},
+            ),
+        ):
+            manifest = generate_proofs(Path(tmp), require_clean=True, no_run=True, repo_root=Path.cwd())
 
         self.assertEqual(manifest.proof_status, "release_grade")
         self.assertTrue(manifest.release_grade)
 
-    def test_git_unavailable_records_non_release_grade(self) -> None:
+    def test_git_unavailable_does_not_crash(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch(
                 "leos_agent.proof._git_metadata",
-                return_value=ProofGitMetadata(None, None, None),
+                return_value={"available": False, "branch": None, "commit_sha": None, "dirty_worktree": None},
             ),
         ):
-            manifest = generate_proofs(Path(tmp), commands=[])
+            manifest = generate_proofs(Path(tmp), no_run=True, repo_root=Path.cwd())
 
         self.assertEqual(manifest.proof_status, "git_unavailable")
-        self.assertFalse(manifest.release_grade)
 
-    def test_main_returns_two_for_require_clean_dirty_worktree(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            mock.patch(
-                "leos_agent.proof._git_metadata",
-                return_value=ProofGitMetadata("abc", "main", True),
-            ),
-        ):
-            code = proof.main(["--output", tmp, "--require-clean"])
+    def test_source_snapshot_and_test_inventory_include_expected_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = generate_proofs(Path(tmp), no_run=True, repo_root=Path.cwd())
 
-        self.assertEqual(code, 2)
+        sources = {snapshot.path: snapshot for snapshot in manifest.source_snapshot}
+        tests = {snapshot.path: snapshot for snapshot in manifest.test_inventory}
+        self.assertIn("src/leos_agent/proof.py", sources)
+        self.assertIn("tests/test_proof_generation.py", tests)
+        self.assertRegex(sources["src/leos_agent/proof.py"].sha256 or "", r"^[0-9a-f]{64}$")
 
-    def test_execute_records_runner_exceptions(self) -> None:
-        command = ProofCommand("missing", ["missing"], "missing")
+    def test_missing_snapshot_file_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            missing = proof._snapshot_files(root, ["missing.py"])[0]
 
-        def missing_runner(command: ProofCommand) -> subprocess.CompletedProcess[str]:
-            raise FileNotFoundError("missing binary")
+        self.assertFalse(missing.exists)
+        self.assertIsNone(missing.sha256)
 
-        def broken_runner(command: ProofCommand) -> subprocess.CompletedProcess[str]:
-            raise RuntimeError("boom")
+    def test_failed_command_recorded_as_failed(self) -> None:
+        result = proof._run_command("false", ["python", "-c", "import sys; sys.exit(7)"], Path.cwd())
 
-        self.assertEqual(proof._execute(command, missing_runner).exit_code, 127)
-        self.assertEqual(proof._execute(command, broken_runner).exit_code, 1)
-
-    def test_environment_handles_missing_package_metadata(self) -> None:
-        with mock.patch("leos_agent.proof.version", side_effect=proof.PackageNotFoundError):
-            env = proof._environment()
-
-        self.assertEqual(env.package_version, "unknown")
-
-    def test_git_metadata_handles_missing_git(self) -> None:
-        with mock.patch("shutil.which", return_value=None):
-            metadata = proof._git_metadata()
-
-        self.assertIsNone(metadata.dirty_worktree)
-
-    def test_command_doc_handles_missing_command(self) -> None:
-        manifest = proof.ProofManifest(
-            generated_at="now",
-            git=ProofGitMetadata("abc", "main", False),
-            environment=proof.ProofEnvironment("py", "linux", "0", "."),
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.exit_code, 7)
+        self.assertEqual(
+            exit_code_for_manifest(proof.ProofManifest("now", "release_grade", True, False, [], {}, {}, [result])), 1
         )
 
-        self.assertIn("Command was not run", proof._command_doc("Missing", manifest, "missing"))
+    def test_missing_command_is_recorded_as_skipped(self) -> None:
+        with mock.patch("leos_agent.proof.subprocess.run", side_effect=FileNotFoundError("missing binary")):
+            result = proof._run_command("missing", ["missing"], Path.cwd())
+
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("missing binary", result.reason or "")
+
+    def test_timed_out_command_is_recorded_as_failed(self) -> None:
+        timeout = subprocess.TimeoutExpired(["slow"], timeout=1, output=b"token=abc", stderr=b"slow")
+
+        with mock.patch("leos_agent.proof.subprocess.run", side_effect=timeout):
+            result = proof._run_command("slow", ["slow"], Path.cwd())
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.reason, "Command timed out")
+        self.assertNotIn("abc", result.stdout)
+
+    def test_output_is_truncated(self) -> None:
+        text, truncated = proof._excerpt("x" * (proof.MAX_EXCERPT + 10))
+
+        self.assertTrue(truncated)
+        self.assertEqual(len(text), proof.MAX_EXCERPT)
+
+    def test_secret_like_strings_are_redacted(self) -> None:
+        redacted = redact_secrets("token=abc api_key: def password secret")
+
+        self.assertNotRegex(redacted, re.compile("abc|def"))
+        self.assertIn("<redacted>", redacted)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,11 @@ no safe_file_write -> file_written should remain unchanged
 
 Counterfactual review compares the action path with the no-action path before execution. After execution, observed state deltas are compared against predicted consequences. Missing or mismatched observations fail verification.
 
+Current implementation supports both legacy `CausalHypothesis` predictions and
+tool-level causal contracts. Contract enforcement is partial runtime support:
+required observations are checked and missing observations trigger rollback, but
+this is not a complete structural causal model.
+
 ### 4. Planning and search
 
 The current implementation includes a deterministic planner that accepts explicit `PlanProposal` candidates, scores each candidate by risk, cost, and benefit, and selects the first satisfactory plan. The intended next layer is an LLM planner adapter that must output the same typed proposal schema rather than free-form text. The runtime should remain independent from any one model vendor.
@@ -119,3 +124,9 @@ for each step:
 - Add anomaly detection over audit logs.
 - Add replay tests for known failures.
 - Add external red-team suites for prompt injection and tool injection.
+
+## Current readiness boundaries
+
+- Implemented: local dev tools, network trust boundaries, safety evals, proof generation, task queue persistence.
+- Partial: causal contract runtime enforcement, Docker/podman command construction.
+- Not complete: production autonomy, full SQLite persistence for all state, formal safety proof, deployment egress controls.

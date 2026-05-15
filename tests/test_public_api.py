@@ -85,11 +85,15 @@ class PublicAPITests(unittest.TestCase):
 
         self.assertTrue(hasattr(leos_agent, "BrowserReadTool"))
 
-    def test_package_exports_dev_registry_and_eval(self) -> None:
+    def test_package_exports_proof_and_eval_api(self) -> None:
         import leos_agent
 
-        self.assertTrue(hasattr(leos_agent, "default_dev_registry"))
+        self.assertTrue(hasattr(leos_agent, "generate_proofs"))
         self.assertTrue(hasattr(leos_agent, "run_safety_evals"))
+        self.assertTrue(hasattr(leos_agent, "default_dev_registry"))
+
+    def test_core_exports_causal_contract_api(self) -> None:
+        from leos_agent.core import CausalContract, DockerSandboxRunner, URLSafetyPolicy  # noqa: F401
 
 
 if __name__ == "__main__":

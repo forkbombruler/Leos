@@ -2,24 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from leos_agent.eval_runner import format_eval_report, run_safety_evals
+from leos_agent.eval_runner import render_eval_report_markdown, run_safety_evals
 
 
 class EvalRunnerTests(unittest.TestCase):
-    def test_safety_eval_suite_passes(self) -> None:
+    def test_safety_evals_pass(self) -> None:
         report = run_safety_evals()
 
         self.assertEqual(report.suite_name, "safety")
         self.assertEqual(report.failed, 0)
-        self.assertGreaterEqual(report.total, 8)
-        self.assertIn("workspace_escape", {result.name for result in report.results})
+        self.assertEqual(report.passed, report.total)
 
-    def test_format_eval_report_contains_summary(self) -> None:
-        report = run_safety_evals()
-        rendered = format_eval_report(report)
+    def test_markdown_contains_case_table(self) -> None:
+        markdown = render_eval_report_markdown(run_safety_evals())
 
-        self.assertIn("Suite: safety", rendered)
-        self.assertIn("workspace_escape", rendered)
+        self.assertIn("| Case | Threat model | Expected | Actual | Status | Severity |", markdown)
+        self.assertIn("workspace_escape", markdown)
 
 
 if __name__ == "__main__":

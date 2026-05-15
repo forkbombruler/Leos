@@ -64,22 +64,19 @@ def render_trace_html(records: Sequence[Mapping[str, Any]], *, title: str = "Leo
 """
 
 
-def render_trace_markdown(records: Sequence[Mapping[str, Any]], *, title: str = "Leos Trace") -> str:
+def render_trace_markdown(records: Sequence[Mapping[str, Any]]) -> str:
     event_counts = Counter(str(record.get("event_type", "unknown")) for record in records)
-    lines = [f"# {title}", "", f"Total events: {len(records)}", "", "## Event Types"]
+    lines = ["# Leos Trace", "", f"Total events: {len(records)}", "", "## Event Types"]
     if event_counts:
         for event_type, count in sorted(event_counts.items()):
             lines.append(f"- `{event_type}`: {count}")
     else:
         lines.append("- none")
-    lines.extend(["", "## Timeline"])
+    lines.extend(["", "## Timeline", "", "| # | Event | Message |", "|---:|---|---|"])
     for index, record in enumerate(records, start=1):
-        event_type = str(record.get("event_type", "unknown"))
-        message = str(record.get("message", ""))
-        payload = json.dumps(record.get("payload", {}), ensure_ascii=False, sort_keys=True, default=str)
-        lines.append(f"{index}. `{event_type}` - {message}")
-        if payload != "{}":
-            lines.append(f"   - payload: `{payload}`")
+        event_type = str(record.get("event_type", "unknown")).replace("|", "\\|")
+        message = str(record.get("message", "")).replace("|", "\\|").replace("\n", " ")
+        lines.append(f"| {index} | `{event_type}` | {message} |")
     return "\n".join(lines) + "\n"
 
 

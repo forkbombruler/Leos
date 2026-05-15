@@ -1,26 +1,38 @@
 # Security Scan
 
+- Bandit exit code: `0`
+- Bandit status: `passed`
+- High issues: 0
+- Medium issues: 0
+- Low issues: 0
+- `# nosec` count in key source files: 5
+
+Known warnings:
+- Bandit output is a static scan and does not prove runtime isolation.
+- Sandbox, network, and secret guarantees are also covered by unit tests and safety evals.
+
+# Bandit Raw Output
+
 ## bandit
 
 - Command: `bandit -r src`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `0.654`
-- Started: `2026-05-15T10:22:50Z`
-- Finished: `2026-05-15T10:22:50Z`
+- Duration seconds: `0.715`
+- Truncated: `False`
 
 ### stdout
 
 ```text
-Run started:2026-05-15 10:22:50.786677+00:00
+Run started:2026-05-15 10:42:49.895909+00:00
 
 Test results:
 	No issues identified.
 
 Code scanned:
-	Total lines of code: 6564
+	Total lines of code: 6659
 	Total lines skipped (#nosec): 0
-	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 13
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 15
 
 Run metrics:
 	Total issues (by severity):
@@ -45,39 +57,6 @@ Files skipped (0):
 [main]	INFO	cli include tests: None
 [main]	INFO	cli exclude tests: None
 [main]	INFO	running on Python 3.14.4
-[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: only is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: subprocess is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: execution is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: for is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: local is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: dev is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: tools is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: only is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: git is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: invocation is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: only is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: test is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: command is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: scheme is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: checked is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: by is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: tool is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: proof is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: generation is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: runs is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: explicit is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: commands is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: explicit is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: argv is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: intentional is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: subprocess is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: sandboxing is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: workspace is not a test name or id, ignoring
-[manager]	WARNING	Test in comment: scoped is not a test name or id, ignoring
 [manager]	WARNING	Test in comment: container is not a test name or id, ignoring
 [manager]	WARNING	Test in comment: internal is not a test name or id, ignoring
 [manager]	WARNING	Test in comment: tmpfs is not a test name or id, ignoring
@@ -108,3 +87,4 @@ Files skipped (0):
 [tester]	WARNING	nosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:235
 
 ```
+
