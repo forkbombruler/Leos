@@ -95,6 +95,23 @@ class NetworkFetchToolTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIsInstance(result.error, ToolTimeout)
 
+    def test_url_safety_blocks_ssrf_targets_and_credentials(self) -> None:
+        tool = NetworkFetchTool()
+        blocked = [
+            "http://localhost",
+            "http://127.0.0.1",
+            "http://169.254.169.254/latest/meta-data",
+            "http://10.0.0.1",
+            "http://user:pass@example.com",
+            "ftp://example.com",
+        ]
+
+        for url in blocked:
+            with self.subTest(url=url):
+                self.assertFalse(tool.dry_run({"url": url}, WorldState()).ok)
+
+        self.assertTrue(tool.dry_run({"url": "https://example.com"}, WorldState()).ok)
+
 
 class BrowserReadToolTests(unittest.TestCase):
     def test_not_registered_by_default(self) -> None:

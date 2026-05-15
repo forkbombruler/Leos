@@ -269,6 +269,110 @@ class MicroVMSandboxRunner:
         raise SandboxUnavailable("microVM sandbox requires external runtime")
 
 
+class DockerSandboxRunner:
+    """Docker/podman command runner with conservative container defaults."""
+
+    def __init__(
+        self,
+        workspace_root: Path,
+        *,
+        image: str = "python:3.12-slim",
+        runtime: str | None = None,
+        timeout_seconds: float = 30.0,
+        network_disabled: bool = True,
+        memory_limit: str = "512m",
+        cpus: str = "1",
+        read_only_rootfs: bool = True,
+        pids_limit: int = 256,
+        user: str = "65532:65532",
+    ) -> None:
+        self.workspace_root = workspace_root.resolve()
+        self.image = image
+        self.runtime = runtime
+        self.timeout_seconds = timeout_seconds
+        self.network_disabled = network_disabled
+        self.memory_limit = memory_limit
+        self.cpus = cpus
+        self.read_only_rootfs = read_only_rootfs
+        self.pids_limit = pids_limit
+        self.user = user
+
+    def _runtime_binary(self) -> str:
+        if self.runtime:
+            return self.runtime
+        for candidate in ("docker", "podman"):
+            found = shutil.which(candidate)
+            if found:
+                return found
+        raise SandboxUnavailable("docker or podman runtime is not available")
+
+    def build_argv(self, command: SandboxCommand) -> list[str]:
+        if not command.argv:
+            raise SandboxViolation("argv must not be empty")
+        runtime = self._runtime_binary()
+        argv = [
+            runtime,
+            "run",
+            "--rm",
+            "--workdir",
+            "/workspace",
+            "--mount",
+            f"type=bind,src={self.workspace_root},dst=/workspace",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--memory",
+            self.memory_limit,
+            "--cpus",
+            self.cpus,
+            "--pids-limit",
+            str(self.pids_limit),
+            "--tmpfs",
+            "/tmp",  # nosec B108 - container-internal tmpfs mount target, not a host temp path
+            "--user",
+            self.user,
+        ]
+        if self.network_disabled:
+            argv.extend(["--network", "none"])
+        if self.read_only_rootfs:
+            argv.append("--read-only")
+        argv.append(self.image)
+        argv.extend(command.argv)
+        return argv
+
+    def run(self, command: SandboxCommand) -> SandboxResult:
+        try:
+            argv = self.build_argv(command)
+        except SandboxUnavailable:
+            raise
+        timeout = min(command.timeout_seconds, self.timeout_seconds)
+        try:
+            proc = subprocess.run(  # nosec B603 - argv constructed without shell
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return SandboxResult(False, None, "", "", timed_out=True, message="Container command timed out")
+        except OSError as exc:
+            return SandboxResult(False, None, "", str(exc), message=f"Container command failed to start: {exc}")
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+        truncated = len(stdout) > command.max_output_bytes or len(stderr) > command.max_output_bytes
+        return SandboxResult(
+            ok=proc.returncode == 0,
+            returncode=proc.returncode,
+            stdout=stdout[: command.max_output_bytes],
+            stderr=stderr[: command.max_output_bytes],
+            truncated=truncated,
+            message=(
+                "Container command completed" if proc.returncode == 0 else f"Container exited with {proc.returncode}"
+            ),
+        )
+
+
 # -- sandbox command tool ---------------------------------------------------
 
 

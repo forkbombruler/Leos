@@ -45,8 +45,10 @@ The initial implementation includes:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 python -m unittest discover -s tests
+leos eval --suite safety
+python scripts/generate_proofs.py
 ```
 
 For development and audit checks:

@@ -57,12 +57,17 @@ Each tool declares:
 - permissions
 - default risk
 - reversibility
+- sandbox policy
+- filesystem/network scope
+- optional causal contract
 
 Each tool must support:
 
 - `dry_run`
 - `execute`
 - `rollback`
+
+Developer tools are available through `default_dev_registry()`. High-risk tools such as test execution and network fetch are opt-in and remain subject to policy and approval.
 
 ### 6. Memory and learning
 
@@ -113,6 +118,8 @@ for each step:
 - Add per-user and per-tool capability grants.
 - Add secure secret handling and never expose secrets to untrusted tools.
 - Run high-risk tools in containers or microVMs.
+- Generate proof documents before release review.
+- Run `leos eval --suite safety` for safety regressions.
 - Use structured LLM outputs with JSON schema validation.
 - Add anomaly detection over audit logs.
 - Add replay tests for known failures.

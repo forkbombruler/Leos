@@ -1,11 +1,13 @@
 # Trace Viewer
 
-Leos can render an audit JSONL log as a static HTML trace.
+Leos can render an audit JSONL log as static HTML or markdown.
 
 ## Run
 
 ```bash
 leos trace-html logs/latest.jsonl --output trace.html
+leos trace --audit logs/latest.jsonl --format markdown
+leos trace --audit logs/latest.jsonl --format html --output trace.html
 ```
 
 The output is a self-contained HTML file. It shows:
@@ -15,6 +17,7 @@ The output is a self-contained HTML file. It shows:
 - Event type.
 - Message.
 - JSON payload.
+- Markdown timelines for CLI review.
 
 ## Why Static HTML
 

@@ -7,6 +7,7 @@ Safety properties:
 - require the `network` permission
 - declare `network_access=True`
 - reject non-HTTP(S) URLs
+- reject SSRF-prone local, private, link-local, metadata, and credential-bearing URLs during dry-run
 - disallow secrets
 - mark fetched content as `untrusted_external`
 - mark policy override, credential request, and system instruction use as forbidden
