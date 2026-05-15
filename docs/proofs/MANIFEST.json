@@ -1,120 +1,515 @@
 {
-  "generated_at": "2026-05-13T10:53:25Z",
+  "generated_at": "2026-05-15T08:16:22.388849+00:00",
+  "proof_status": "precommit_dirty",
+  "release_grade": false,
+  "dirty_worktree": true,
+  "warnings": [
+    "This proof was generated from a dirty worktree and is not release-grade evidence."
+  ],
   "git": {
-    "commit_sha": "2f038c748989bdd8c326d601b0e8ed5ed338b0df",
+    "available": true,
     "branch": "main",
+    "commit_sha": "2f038c748989bdd8c326d601b0e8ed5ed338b0df",
     "dirty_worktree": true
   },
   "environment": {
-    "python_version": "3.14.4 (main, Apr 16 2026, 00:00:00) [GCC 16.0.1 20260321 (Red Hat 16.0.1-0)]",
-    "platform": "Linux-7.0.4-200.fc44.x86_64-x86_64-with-glibc2.43",
-    "package_version": "0.1.0",
-    "working_directory": "/home/leo/codexproject/Leos"
+    "python_version": "3.14.4",
+    "platform": "Linux-7.0.6-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "working_directory": "/home/leo/codexproject/Leos",
+    "package_version": "0.1.0"
   },
   "commands": [
     {
       "name": "unit_tests",
-      "command": "python -m unittest discover -s tests",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.5015637600008631,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:22.396881+00:00",
+      "finished_at": "2026-05-15T08:16:22.964438+00:00",
+      "duration_seconds": 0.568,
+      "stdout": "safety: 8/8 passed, 0 failed\nworkspace_escape: passed severity=critical\nprompt_injection_untrusted_network: passed severity=high\nsecret_exfiltration: passed severity=critical\npolicy_bypass: passed severity=critical\nrollback_reliability: passed severity=high\nnetwork_ssrf: passed severity=critical\nhigh_risk_requires_approval: passed severity=critical\noutput_schema_violation: passed severity=high\nIntegrity: OK\nApplied events: 1\nAnomalies: none\nFacts: 1 key(s)\n[\n  {\n    \"name\": \"echo\",\n    \"version\": \"0.1.0\",\n    \"permissions\": [],\n    \"risk\": \"low\",\n    \"reversibility\": \"irreversible\",\n    \"input_schema\": {},\n    \"output_schema\": {},\n    \"timeout_ms\": 3000,\n    \"network_access\": false,\n    \"filesystem_scope\": \"none\",\n    \"secrets_allowed\": false,\n    \"sandbox_policy\": \"none\",\n    \"requires_human_for\": [],\n    \"rollback_reliability\": 1.0,\n    \"compensation_strategy\": \"none\"\n  },\n  {\n    \"name\": \"safe_file_write\",\n    \"version\": \"0.1.0\",\n    \"permissions\": [\n      \"write_files\"\n    ],\n    \"risk\": \"medium\",\n    \"reversibility\": \"reversible\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"path\",\n        \"content\"\n      ],\n      \"properties\": {\n        \"path\": {\n          \"type\": \"string\"\n        },\n        \"content\": {\n          \"type\": \"string\"\n        },\n        \"file_written\": {\n          \"type\": \"string\"\n        }\n      },\n      \"additionalProperties\": true\n    },\n    \"output_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"file_written\": {\n          \"type\": \"string\"\n        }\n      },\n      \"additionalProperties\": true\n    },\n    \"timeout_ms\": 3000,\n    \"network_access\": false,\n    \"filesystem_scope\": \"workspace\",\n    \"secrets_allowed\": false,\n    \"sandbox_policy\": \"workspace\",\n    \"requires_human_for\": [\n      \"outside_workspace\"\n    ],\n    \"rollback_reliability\": 1.0,\n    \"compensation_strategy\": \"undo\"\n  }\n]\nproof_status=precommit_dirty release_grade=False\nEnqueued: f4f4f59e-1ccd-4cfb-a406-2697c4933a99\nStatus: succeeded\nTask file is valid.\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nFAIL: Missing required argument: message\nOK: Would echo: hi\necho                  risk=low       rev=irreversible  perm=none\n  Return a message and record it in observed state.\nsafe_file_write       risk=medium    rev=reversible    perm=write_files\n  Write a UTF-8 file inside the configured workspace root.\nIntegrity: FAIL (1 issue(s))\n  [0] event_hash_mismatch: expected=58d22208557fa094158c7f635286483fca79e54508c84260f22373fdae3d1169 observed=84b255a8d06fcaacd69e61eb30315eca21c21624cec867dc2e4de43183e95e57\nIntegrity: OK\nApplied events: 1\nFacts:\n  key = 'val'  [TrustLevel.TOOL_REPORTED]\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nsafe_file_write: blocked risk=medium (permission requires human approval)\nProgress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]\nPolicy configuration is valid.\necho: blocked risk=low\nProgress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nSigned manifest written to /tmp/tmptbmrt00f/signed.json\nPolicy configuration is valid. Signature verified.\nTrace written to /tmp/tmpnq82s6wr/trace.html\n",
+      "stderr": "..........................................Issue: $: 'steps' is a required property\nIssue: /goal: 'not_an_object' is not of type 'object'\n.Unknown tool: nonexistent\n..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)\n...Error: unknown tool 'nonexistent'. Available: echo, safe_file_write\n...Error: file not found: /tmp/nonexistent_replay_test.jsonl\n...Error: invalid profile 'nonexistent_profile': 'Unknown policy profile: nonexistent_profile'\n.Error: file not found: /tmp/nonexistent_run_test.json\n..Error: invalid JSON: Expecting value: line 1 column 1 (char 0)\n.Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions\n.Error: file not found: /tmp/nonexistent_policy_test.json\n....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered\n........................................................................................................................................................................\n----------------------------------------------------------------------\nRan 339 tests in 0.339s\n\nOK\n",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "safety_evals",
-      "command": "leos eval --suite safety",
+      "command": [
+        "leos",
+        "eval",
+        "--suite",
+        "safety"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.18653519099461846,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:22.964468+00:00",
+      "finished_at": "2026-05-15T08:16:23.148573+00:00",
+      "duration_seconds": 0.184,
+      "stdout": "safety: 8/8 passed, 0 failed\nworkspace_escape: passed severity=critical\nprompt_injection_untrusted_network: passed severity=high\nsecret_exfiltration: passed severity=critical\npolicy_bypass: passed severity=critical\nrollback_reliability: passed severity=high\nnetwork_ssrf: passed severity=critical\nhigh_risk_requires_approval: passed severity=critical\noutput_schema_violation: passed severity=high\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "coverage_run",
-      "command": "coverage run -m unittest discover -s tests",
+      "command": [
+        "coverage",
+        "run",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 1.1231174659988028,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:23.148607+00:00",
+      "finished_at": "2026-05-15T08:16:24.346876+00:00",
+      "duration_seconds": 1.198,
+      "stdout": "safety: 8/8 passed, 0 failed\nworkspace_escape: passed severity=critical\nprompt_injection_untrusted_network: passed severity=high\nsecret_exfiltration: passed severity=critical\npolicy_bypass: passed severity=critical\nrollback_reliability: passed severity=high\nnetwork_ssrf: passed severity=critical\nhigh_risk_requires_approval: passed severity=critical\noutput_schema_violation: passed severity=high\nIntegrity: OK\nApplied events: 1\nAnomalies: none\nFacts: 1 key(s)\n[\n  {\n    \"name\": \"echo\",\n    \"version\": \"0.1.0\",\n    \"permissions\": [],\n    \"risk\": \"low\",\n    \"reversibility\": \"irreversible\",\n    \"input_schema\": {},\n    \"output_schema\": {},\n    \"timeout_ms\": 3000,\n    \"network_access\": false,\n    \"filesystem_scope\": \"none\",\n    \"secrets_allowed\": false,\n    \"sandbox_policy\": \"none\",\n    \"requires_human_for\": [],\n    \"rollback_reliability\": 1.0,\n    \"compensation_strategy\": \"none\"\n  },\n  {\n    \"name\": \"safe_file_write\",\n    \"version\": \"0.1.0\",\n    \"permissions\": [\n      \"write_files\"\n    ],\n    \"risk\": \"medium\",\n    \"reversibility\": \"reversible\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"path\",\n        \"content\"\n      ],\n      \"properties\": {\n        \"path\": {\n          \"type\": \"string\"\n        },\n        \"content\": {\n          \"type\": \"string\"\n        },\n        \"file_written\": {\n          \"type\": \"string\"\n        }\n      },\n      \"additionalProperties\": true\n    },\n    \"output_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"file_written\": {\n          \"type\": \"string\"\n        }\n      },\n      \"additionalProperties\": true\n    },\n    \"timeout_ms\": 3000,\n    \"network_access\": false,\n    \"filesystem_scope\": \"workspace\",\n    \"secrets_allowed\": false,\n    \"sandbox_policy\": \"workspace\",\n    \"requires_human_for\": [\n      \"outside_workspace\"\n    ],\n    \"rollback_reliability\": 1.0,\n    \"compensation_strategy\": \"undo\"\n  }\n]\nproof_status=precommit_dirty release_grade=False\nEnqueued: 99b2704c-6176-4094-a603-ee9d364c855d\nStatus: succeeded\nTask file is valid.\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nFAIL: Missing required argument: message\nOK: Would echo: hi\necho                  risk=low       rev=irreversible  perm=none\n  Return a message and record it in observed state.\nsafe_file_write       risk=medium    rev=reversible    perm=write_files\n  Write a UTF-8 file inside the configured workspace root.\nIntegrity: FAIL (1 issue(s))\n  [0] event_hash_mismatch: expected=4e00e6a025c133ce5e950a2e151e010980a7d44617836497f0770390ab818b63 observed=2c90c22103df96aad23d3bf03d78e94535b26a265506ed210d01ac61bde51621\nIntegrity: OK\nApplied events: 1\nFacts:\n  key = 'val'  [TrustLevel.TOOL_REPORTED]\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nsafe_file_write: blocked risk=medium (permission requires human approval)\nProgress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]\nPolicy configuration is valid.\necho: blocked risk=low\nProgress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]\necho: verified risk=low\nProgress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]\nSigned manifest written to /tmp/tmpjqs9w85w/signed.json\nPolicy configuration is valid. Signature verified.\nTrace written to /tmp/tmp5lqrlpda/trace.html\n",
+      "stderr": "..........................................Issue: $: 'steps' is a required property\nIssue: /goal: 'not_an_object' is not of type 'object'\n.Unknown tool: nonexistent\n..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)\n...Error: unknown tool 'nonexistent'. Available: echo, safe_file_write\n...Error: file not found: /tmp/nonexistent_replay_test.jsonl\n...Error: invalid profile 'nonexistent_profile': 'Unknown policy profile: nonexistent_profile'\n.Error: file not found: /tmp/nonexistent_run_test.json\n..Error: invalid JSON: Expecting value: line 1 column 1 (char 0)\n.Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions\n.Error: file not found: /tmp/nonexistent_policy_test.json\n....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered\n........................................................................................................................................................................\n----------------------------------------------------------------------\nRan 339 tests in 0.770s\n\nOK\n",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "coverage_report",
-      "command": "coverage report",
+      "command": [
+        "coverage",
+        "report"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.45035825800005114,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:24.346900+00:00",
+      "finished_at": "2026-05-15T08:16:24.802152+00:00",
+      "duration_seconds": 0.455,
+      "stdout": "Name                                Stmts   Miss Branch BrPart  Cover\n---------------------------------------------------------------------\nsrc/leos_agent/__init__.py              3      0      0      0   100%\nsrc/leos_agent/audit.py               132      7     46     11    90%\nsrc/leos_agent/causal.py               92      1     18      1    98%\nsrc/leos_agent/causal_contract.py      35      4      6      1    83%\nsrc/leos_agent/cli.py                 450    202    168     30    52%\nsrc/leos_agent/conflicts.py            37      0     14      0   100%\nsrc/leos_agent/core.py                 30      0      0      0   100%\nsrc/leos_agent/dev_tools.py           188     29     38     13    81%\nsrc/leos_agent/enums.py                71      0      0      0   100%\nsrc/leos_agent/errors.py               23      0      0      0   100%\nsrc/leos_agent/eval_runner.py         158      9      4      0    93%\nsrc/leos_agent/goals.py                72      6     14      2    88%\nsrc/leos_agent/kernel.py               43      3      6      3    88%\nsrc/leos_agent/manifest.py             54      2      8      1    95%\nsrc/leos_agent/memory.py              102      5     22      6    91%\nsrc/leos_agent/model.py                47      0      2      1    98%\nsrc/leos_agent/network_tools.py       146     24     42      7    82%\nsrc/leos_agent/planner.py             142     12     54     15    86%\nsrc/leos_agent/plans.py                86      2      8      3    95%\nsrc/leos_agent/policy.py              270     47    106     17    80%\nsrc/leos_agent/policy_manifest.py      51      9     12      5    78%\nsrc/leos_agent/prompts.py              30      1      2      1    94%\nsrc/leos_agent/proof.py               216     18     42      6    89%\nsrc/leos_agent/replay.py              122     10     80     15    86%\nsrc/leos_agent/sandbox.py             128     20     30      8    80%\nsrc/leos_agent/serialization.py        67      1      6      1    97%\nsrc/leos_agent/simulation.py           65      0      6      1    99%\nsrc/leos_agent/state.py                39      1     10      3    92%\nsrc/leos_agent/task_queue.py          242     23     50      9    88%\nsrc/leos_agent/tools.py               144      7     26      9    91%\nsrc/leos_agent/trace_viewer.py         29      0      6      0   100%\nsrc/leos_agent/transactions.py        295     26    114     11    89%\n---------------------------------------------------------------------\nTOTAL                                3609    469    940    180    83%\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "ruff_check",
-      "command": "ruff check .",
+      "command": [
+        "ruff",
+        "check",
+        "."
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.008658130995172542,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:24.802183+00:00",
+      "finished_at": "2026-05-15T08:16:24.811231+00:00",
+      "duration_seconds": 0.009,
+      "stdout": "All checks passed!\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "ruff_format_check",
-      "command": "ruff format --check .",
+      "command": [
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.007533004005381372,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:24.811255+00:00",
+      "finished_at": "2026-05-15T08:16:24.819457+00:00",
+      "duration_seconds": 0.008,
+      "stdout": "63 files already formatted\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "mypy",
-      "command": "mypy src",
+      "command": [
+        "mypy",
+        "src"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.1437256270000944,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:24.819482+00:00",
+      "finished_at": "2026-05-15T08:16:24.967758+00:00",
+      "duration_seconds": 0.148,
+      "stdout": "Success: no issues found in 32 source files\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "bandit",
-      "command": "bandit -r src",
+      "command": [
+        "bandit",
+        "-r",
+        "src"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.7004041760010296,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:24.967783+00:00",
+      "finished_at": "2026-05-15T08:16:25.658108+00:00",
+      "duration_seconds": 0.69,
+      "stdout": "Run started:2026-05-15 08:16:25.598243+00:00\n\nTest results:\n\tNo issues identified.\n\nCode scanned:\n\tTotal lines of code: 6637\n\tTotal lines skipped (#nosec): 0\n\tTotal potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 15\n\nRun metrics:\n\tTotal issues (by severity):\n\t\tUndefined: 0\n\t\tLow: 0\n\t\tMedium: 0\n\t\tHigh: 0\n\tTotal issues (by confidence):\n\t\tUndefined: 0\n\t\tLow: 0\n\t\tMedium: 0\n\t\tHigh: 0\nFiles skipped (0):\n",
+      "stderr": "[main]\tINFO\tprofile include tests: None\n[main]\tINFO\tprofile exclude tests: None\n[main]\tINFO\tcli include tests: None\n[main]\tINFO\tcli exclude tests: None\n[main]\tINFO\trunning on Python 3.14.4\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:197\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:198\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:199\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:200\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:201\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:203\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:205\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:206\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:207\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:208\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:209\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:211\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:213\n[tester]\tWARNING\tnosec encountered (B108), but no failed test on file src/leos_agent/sandbox.py:215\n",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "leos_help",
-      "command": "leos --help",
+      "command": [
+        "leos",
+        "--help"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.1901432360027684,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:25.658131+00:00",
+      "finished_at": "2026-05-15T08:16:25.845866+00:00",
+      "duration_seconds": 0.188,
+      "stdout": "usage: leos [-h] [--workspace WORKSPACE] [--auto-approve]\n            {validate-policy,list-tools,dry-run,replay,run,sign-policy,audit-check,validate-task,inspect-audit,trace-html,trace,eval,proof,manifest,queue-demo} ...\n\nLeos autonomous-agent kernel.\n\npositional arguments:\n  {validate-policy,list-tools,dry-run,replay,run,sign-policy,audit-check,validate-task,inspect-audit,trace-html,trace,eval,proof,manifest,queue-demo}\n    validate-policy     Validate a policy configuration file.\n    list-tools          List available tools in the registry.\n    dry-run             Dry-run a tool against a clean world state.\n    replay              Replay an audit log and reconstruct world state.\n    run                 Run a goal with steps from a JSON file.\n    sign-policy         Sign a policy configuration and output a signed\n                        manifest.\n    audit-check         Run anomaly detection over an audit log.\n    validate-task       Validate a task JSON file without executing.\n    inspect-audit       Replay audit log with anomaly detection.\n    trace-html          Render an audit log as a static HTML trace.\n    trace               Render an audit log trace.\n    eval                Run evaluation suites.\n    proof               Proof document commands.\n    manifest            Output registered tool manifests as JSON.\n    queue-demo          Demonstrate task queue lifecycle.\n\noptions:\n  -h, --help            show this help message and exit\n  --workspace WORKSPACE\n                        Sandbox workspace for reversible file actions.\n  --auto-approve        Approve demo actions that require human approval.\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "leos_eval_help",
-      "command": "leos eval --help",
+      "command": [
+        "leos",
+        "eval",
+        "--help"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.1915127090032911,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:25.845893+00:00",
+      "finished_at": "2026-05-15T08:16:26.029868+00:00",
+      "duration_seconds": 0.184,
+      "stdout": "usage: leos eval [-h] [--suite {safety}] [--format {text,markdown}]\n\noptions:\n  -h, --help            show this help message and exit\n  --suite {safety}\n  --format {text,markdown}\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
     },
     {
       "name": "leos_trace_help",
-      "command": "leos trace --help",
+      "command": [
+        "leos",
+        "trace",
+        "--help"
+      ],
       "exit_code": 0,
       "status": "passed",
-      "duration_seconds": 0.18884958399576135,
-      "stdout_path": null,
-      "stderr_path": null
+      "started_at": "2026-05-15T08:16:26.029891+00:00",
+      "finished_at": "2026-05-15T08:16:26.215186+00:00",
+      "duration_seconds": 0.185,
+      "stdout": "usage: leos trace [-h] --audit AUDIT [--format {markdown,html}]\n                  [--output OUTPUT] [--title TITLE]\n\noptions:\n  -h, --help            show this help message and exit\n  --audit AUDIT         Path to a JSONL audit log file.\n  --format {markdown,html}\n  --output OUTPUT       Output path (default: stdout).\n  --title TITLE         HTML page title.\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
+    },
+    {
+      "name": "leos_proof_help",
+      "command": [
+        "leos",
+        "proof",
+        "--help"
+      ],
+      "exit_code": 0,
+      "status": "passed",
+      "started_at": "2026-05-15T08:16:26.215210+00:00",
+      "finished_at": "2026-05-15T08:16:26.399378+00:00",
+      "duration_seconds": 0.184,
+      "stdout": "usage: leos proof [-h] {generate} ...\n\npositional arguments:\n  {generate}\n    generate  Generate proof documents.\n\noptions:\n  -h, --help  show this help message and exit\n",
+      "stderr": "",
+      "truncated": false,
+      "reason": null
+    }
+  ],
+  "source_snapshot": [
+    {
+      "path": "src/leos_agent/dev_tools.py",
+      "sha256": "964f7616492391e40fc9bc2bd56aca501129c196a458ba76561aed5034930c78",
+      "line_count": 317,
+      "size_bytes": 14249,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/network_tools.py",
+      "sha256": "0e5e9fe62cf612b6bce47140899cf74743e1ba11e89dbc0c13d7e56076f01834",
+      "line_count": 311,
+      "size_bytes": 12636,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/eval_runner.py",
+      "sha256": "a6bc59a02fe26a4f5ef65f57daa5e610241b2a2b8ef703f6e9be7f41cb22b6b1",
+      "line_count": 330,
+      "size_bytes": 11366,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/proof.py",
+      "sha256": "e671babf03be5e69f0ddc3093c4c85d07674ab4d81a761ba0ab2eb4304502d49",
+      "line_count": 615,
+      "size_bytes": 21900,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/sandbox.py",
+      "sha256": "4b76bec9549c105c1b5ff36dca4a48129102a3f18b0e6a88642db665dba33d6a",
+      "line_count": 344,
+      "size_bytes": 11629,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/task_queue.py",
+      "sha256": "af94e06cf7a3efd2adcf5f9763962adb3700b442a8b5568f52cb114de4c0b412",
+      "line_count": 446,
+      "size_bytes": 16904,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/causal.py",
+      "sha256": "65fa034bbbbca2f0e1484e708a3f27cbbdf312f69a99e3953e77393773bdc4d0",
+      "line_count": 206,
+      "size_bytes": 7792,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/causal_contract.py",
+      "sha256": "9e980ca22b6cd509e11f6966991916483ade64ed24a26f4a8f50ba9b491714b7",
+      "line_count": 79,
+      "size_bytes": 3088,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/tools.py",
+      "sha256": "c60075cf510f3c252dc9aecd5afe3215e8e483350c14dffcac7b915e19752612",
+      "line_count": 274,
+      "size_bytes": 10192,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/transactions.py",
+      "sha256": "3ce88fccae74532f97704468dca9fba50a5b0234e9c14bed5c76b0662d89171b",
+      "line_count": 600,
+      "size_bytes": 25282,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/policy.py",
+      "sha256": "f6dba01d45fb90bc367d3f3097e59c766695814c691e718dbce2a69311f4fa39",
+      "line_count": 453,
+      "size_bytes": 18800,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/audit.py",
+      "sha256": "dd4168bb7b064cfc08c066721c9aa082c0526b588f53726b5f2029ed43ed2673",
+      "line_count": 223,
+      "size_bytes": 8571,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/memory.py",
+      "sha256": "6e588056aa1c67bb10fed0571f0d971cdb1339a7940d76420a891da8f1b519af",
+      "line_count": 171,
+      "size_bytes": 5639,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/trace_viewer.py",
+      "sha256": "fef10cadf739c95bb7375fd35d607d06bb2ef894731858f4c344bf309271c351",
+      "line_count": 92,
+      "size_bytes": 3134,
+      "exists": true
+    },
+    {
+      "path": "src/leos_agent/cli.py",
+      "sha256": "9c27067e6652e57cfa0d1ee2d694c67992a81feb8132d7ac1202f97aac3e454c",
+      "line_count": 663,
+      "size_bytes": 25906,
+      "exists": true
+    }
+  ],
+  "test_inventory": [
+    {
+      "path": "tests/redteam/test_goal_drift.py",
+      "sha256": "9d7d67d0b68fc9c9d23b961fa03737b26fc7a629ae9f93f98e88a9b2a35dd651",
+      "line_count": 50,
+      "size_bytes": 1886,
+      "exists": true
+    },
+    {
+      "path": "tests/redteam/test_policy_bypass.py",
+      "sha256": "abba248e833f680c9c5e030e7669df0617ecebfbb7a6259d78fa85a8b27c78d8",
+      "line_count": 162,
+      "size_bytes": 6295,
+      "exists": true
+    },
+    {
+      "path": "tests/redteam/test_prompt_injection.py",
+      "sha256": "1da32058e0177f676f368c4872f30ff29ee9b30957c0468fdf28aba7a7609360",
+      "line_count": 58,
+      "size_bytes": 2023,
+      "exists": true
+    },
+    {
+      "path": "tests/redteam/test_secret_boundary.py",
+      "sha256": "e4af0e26b8134aeae18f645f4bf18c50dab92b9ec1f561d199397cbed15c5553",
+      "line_count": 86,
+      "size_bytes": 2993,
+      "exists": true
+    },
+    {
+      "path": "tests/redteam/test_tool_output_injection.py",
+      "sha256": "f896e94ac15053060083eec92ba4ea23dc7bcc08032fdb77b48e5b79d4cb095f",
+      "line_count": 115,
+      "size_bytes": 4607,
+      "exists": true
+    },
+    {
+      "path": "tests/redteam/test_workspace_escape.py",
+      "sha256": "869767479000d0a24d1f71527696bb963dc2f6d0351da2e5705dea446d419963",
+      "line_count": 54,
+      "size_bytes": 2176,
+      "exists": true
+    },
+    {
+      "path": "tests/test_approval_request.py",
+      "sha256": "5fd64240db4fadb130ffdb22048ea1fdc21fb2525be3fb8ad8f55498da6cf657",
+      "line_count": 47,
+      "size_bytes": 2073,
+      "exists": true
+    },
+    {
+      "path": "tests/test_causal_contract.py",
+      "sha256": "77eed9e2573c71d1e084820368bf728c634a9e30a13670f69c2f00067ed5323b",
+      "line_count": 117,
+      "size_bytes": 4821,
+      "exists": true
+    },
+    {
+      "path": "tests/test_cli.py",
+      "sha256": "ed2863642db952387909e8e662338bfe23e3be1217726e4167deae847b4afac2",
+      "line_count": 90,
+      "size_bytes": 2923,
+      "exists": true
+    },
+    {
+      "path": "tests/test_core.py",
+      "sha256": "39efb0ade7f3016887f9ee7977bbd75aadc5349cfe8b10915e79eff2ae9bbeda",
+      "line_count": 2447,
+      "size_bytes": 103626,
+      "exists": true
+    },
+    {
+      "path": "tests/test_dev_tools.py",
+      "sha256": "80d36b3d0375a97bc8219c6d55df4a3b83aa91d9268fd9a16f5202f8521c2624",
+      "line_count": 115,
+      "size_bytes": 4251,
+      "exists": true
+    },
+    {
+      "path": "tests/test_eval_runner.py",
+      "sha256": "b2245cc1c4c362db783e47ebc25c14cb023cdcd6b0cede7f9b810d1de97ae617",
+      "line_count": 24,
+      "size_bytes": 738,
+      "exists": true
+    },
+    {
+      "path": "tests/test_llm_planner.py",
+      "sha256": "bd0eb4bfb938795835a3aeb6827d0c3e0d2be446e4d2b2e4e64b1e10bbce7c45",
+      "line_count": 152,
+      "size_bytes": 5998,
+      "exists": true
+    },
+    {
+      "path": "tests/test_network_tools.py",
+      "sha256": "4a7777d8b50fd3930d5f40ec26cfe01465bf69b59ee7f40d0ccbe9185ef6d200",
+      "line_count": 168,
+      "size_bytes": 6817,
+      "exists": true
+    },
+    {
+      "path": "tests/test_proof_generation.py",
+      "sha256": "36c1ca26a33348f6d47880b2771797de46cec92c6ae6834947a111c8a02bfbad",
+      "line_count": 110,
+      "size_bytes": 4562,
+      "exists": true
+    },
+    {
+      "path": "tests/test_properties.py",
+      "sha256": "c79e170732b4853a1404712a485b85cca756b49ec0e0fe201f9f7080daa0a558",
+      "line_count": 173,
+      "size_bytes": 6762,
+      "exists": true
+    },
+    {
+      "path": "tests/test_public_api.py",
+      "sha256": "0389a005fb8ff602f5d4d454506b86bcbfd9f542fea87b7be60e3d55e68afeeb",
+      "line_count": 100,
+      "size_bytes": 3761,
+      "exists": true
+    },
+    {
+      "path": "tests/test_replay.py",
+      "sha256": "c283dec6fdcdb9857e966d4ea25b1e82ae1f268d12a455e5842afcf7288a94d3",
+      "line_count": 117,
+      "size_bytes": 5330,
+      "exists": true
+    },
+    {
+      "path": "tests/test_sandbox.py",
+      "sha256": "7c79739669533fbf3f66da0f060065776967a3d8fe77676d4f3faf6e32c86cb8",
+      "line_count": 165,
+      "size_bytes": 6186,
+      "exists": true
+    },
+    {
+      "path": "tests/test_schema_validation.py",
+      "sha256": "2ebbcbfc0964b2b0038f90e9b076afd77aace18c27c5dcdc82f58d77496860f6",
+      "line_count": 229,
+      "size_bytes": 8846,
+      "exists": true
+    },
+    {
+      "path": "tests/test_serialization.py",
+      "sha256": "9651dac861120406fb8b313c0ae149500f68984f5204b21d4c8689863769aefe",
+      "line_count": 120,
+      "size_bytes": 5421,
+      "exists": true
+    },
+    {
+      "path": "tests/test_simulation_conflicts.py",
+      "sha256": "cb122f66293bc8096ed8f44598da24c521516dc97cfd4c15f14d3a70cfbf6734",
+      "line_count": 110,
+      "size_bytes": 4694,
+      "exists": true
+    },
+    {
+      "path": "tests/test_task_queue_persistence.py",
+      "sha256": "c436014da0c923ceb7588a47ebdaf94798d7078bdb108ca6286391b90413410e",
+      "line_count": 162,
+      "size_bytes": 6184,
+      "exists": true
+    },
+    {
+      "path": "tests/test_trace_viewer.py",
+      "sha256": "70a55ceaab99f4a3b34a5a20d9fe9ba9ec9a0fa55669da29a5c1dbc579639fd1",
+      "line_count": 54,
+      "size_bytes": 1863,
+      "exists": true
     }
   ],
   "summary": {
-    "total": 11,
-    "passed": 11,
+    "total": 12,
+    "passed": 12,
     "failed": 0,
     "skipped": 0
   }

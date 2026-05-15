@@ -39,15 +39,15 @@ class TraceViewerTests(unittest.TestCase):
             self.assertIn("Test Trace", rendered)
             self.assertIn("goal.created", rendered)
 
-    def test_render_trace_markdown_contains_event_types(self) -> None:
-        rendered = render_trace_markdown(
-            [{"event_type": "step.blocked", "message": "blocked", "payload": {"reason": "policy"}}],
-            title="Trace",
-        )
+    def test_markdown_handles_empty_audit(self) -> None:
+        markdown = render_trace_markdown([])
 
-        self.assertIn("# Trace", rendered)
-        self.assertIn("step.blocked", rendered)
-        self.assertIn("policy", rendered)
+        self.assertIn("Total events: 0", markdown)
+
+    def test_markdown_contains_event_types(self) -> None:
+        markdown = render_trace_markdown([{"event_type": "step.blocked", "message": "blocked"}])
+
+        self.assertIn("`step.blocked`", markdown)
 
 
 if __name__ == "__main__":

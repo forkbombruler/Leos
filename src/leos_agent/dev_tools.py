@@ -1,85 +1,66 @@
-"""Workspace-scoped developer tools for local code maintenance."""
+"""Workspace-scoped local developer tools."""
 
 from __future__ import annotations
 
 import fnmatch
 import hashlib
 import os
-import shutil
-import subprocess  # nosec B404 - argv-only subprocess execution for local dev tools
+import subprocess  # nosec B404
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from .enums import CompensationStrategy, Permission, Reversibility, RiskLevel, SandboxPolicy
-from .errors import DryRunFailed, SchemaValidationFailed, ToolTimeout, WorkspaceEscapeBlocked
+from .errors import DryRunFailed, LeosError, WorkspaceEscapeBlocked
 from .state import WorldState
 from .tools import EchoTool, ToolRegistry, ToolResult, ToolSpec
 
-DEFAULT_EXCLUDE_GLOBS = (
-    ".git",
-    ".git/**",
-    ".venv",
-    ".venv/**",
-    "__pycache__",
-    "**/__pycache__/**",
-    "*.pyc",
-    "dist",
-    "dist/**",
-    "build",
-    "build/**",
-    "*.egg-info",
-    "*.egg-info/**",
-)
+DEFAULT_EXCLUDES = (".git/**", ".venv/**", "__pycache__/**", "*.pyc", "dist/**", "build/**", "*.egg-info/**")
+SECRET_ENV_MARKERS = ("TOKEN", "API_KEY", "PASSWORD", "SECRET")
 
 
-def _resolve_workspace_path(workspace_root: Path, relative_path: str = ".") -> Path:
+def _resolve_workspace_path(workspace_root: Path, path: str = ".") -> Path:
     root = workspace_root.resolve()
-    target = (root / relative_path).resolve()
-    if os.path.commonpath([root, target]) != str(root):
+    resolved = (root / path).resolve()
+    if os.path.commonpath([root, resolved]) != str(root):
         raise WorkspaceEscapeBlocked("Path escapes workspace root")
-    return target
+    return resolved
 
 
-def _relpath(workspace_root: Path, path: Path) -> str:
-    return path.resolve().relative_to(workspace_root.resolve()).as_posix()
+def _is_binary(path: Path, sample_size: int = 4096) -> bool:
+    try:
+        return b"\0" in path.read_bytes()[:sample_size]
+    except OSError:
+        return False
 
 
 def _matches_any(path: str, patterns: Sequence[str]) -> bool:
-    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+    return any(fnmatch.fnmatch(path, pattern) or fnmatch.fnmatch(Path(path).name, pattern) for pattern in patterns)
 
 
-def _looks_binary(data: bytes) -> bool:
-    return b"\x00" in data
+def _safe_test_env() -> dict[str, str]:
+    allowed = ("PATH", "PYTHONPATH", "VIRTUAL_ENV")
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key in allowed and not any(marker in key.upper() for marker in SECRET_ENV_MARKERS)
+    }
 
 
 class ListFilesTool:
     spec = ToolSpec(
         name="list_files",
-        description="List files recursively inside the workspace.",
+        description="List files recursively inside a workspace.",
         permissions=(Permission.READ_FILES,),
         default_risk=RiskLevel.LOW,
-        reversibility=Reversibility.IRREVERSIBLE,
         sandbox_policy=SandboxPolicy.WORKSPACE,
         filesystem_scope="workspace",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "include_globs": {"type": "array", "items": {"type": "string"}},
-                "exclude_globs": {"type": "array", "items": {"type": "string"}},
-                "max_files": {"type": "integer", "minimum": 1},
-            },
-            "additionalProperties": False,
-        },
+        input_schema={"type": "object", "additionalProperties": True},
         output_schema={
             "type": "object",
             "required": ["files_listed", "file_count"],
-            "properties": {
-                "files_listed": {"type": "array", "items": {"type": "string"}},
-                "file_count": {"type": "integer"},
-            },
-            "additionalProperties": False,
+            "properties": {"files_listed": {"type": "array"}, "file_count": {"type": "integer"}},
+            "additionalProperties": True,
         },
     )
 
@@ -87,9 +68,6 @@ class ListFilesTool:
         self.workspace_root = workspace_root.resolve()
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        issues = self.spec.validate_input(arguments)
-        if issues:
-            return ToolResult(False, "Input schema validation failed", {"schema_issues": issues})
         try:
             _resolve_workspace_path(self.workspace_root, str(arguments.get("path", ".")))
         except WorkspaceEscapeBlocked as exc:
@@ -97,29 +75,25 @@ class ListFilesTool:
         return ToolResult(True, "Would list workspace files")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        dry = self.dry_run(arguments, state)
-        if not dry.ok:
-            return dry
+        dry_run = self.dry_run(arguments, state)
+        if not dry_run.ok:
+            return dry_run
         base = _resolve_workspace_path(self.workspace_root, str(arguments.get("path", ".")))
-        include = tuple(str(p) for p in arguments.get("include_globs", ("**",)))
-        exclude = (*DEFAULT_EXCLUDE_GLOBS, *(str(p) for p in arguments.get("exclude_globs", ())))
+        include = tuple(arguments.get("include_globs") or ("*", "**/*"))
+        exclude = tuple(arguments.get("exclude_globs") or DEFAULT_EXCLUDES)
         max_files = int(arguments.get("max_files", 1000))
         files: list[str] = []
-        for path in sorted(base.rglob("*")):
-            rel = _relpath(self.workspace_root, path)
-            if _matches_any(rel, exclude):
-                if path.is_dir():
-                    continue
+        for item in sorted(base.rglob("*")):
+            if not item.is_file():
                 continue
-            if not path.is_file():
-                continue
-            if include and not _matches_any(rel, include):
+            rel = item.relative_to(self.workspace_root).as_posix()
+            if _matches_any(rel, exclude) or not _matches_any(rel, include):
                 continue
             files.append(rel)
             if len(files) >= max_files:
                 break
         delta = {"files_listed": files, "file_count": len(files)}
-        return ToolResult(True, f"Listed {len(files)} file(s)", data=delta, observed_state_delta=delta)
+        return ToolResult(True, f"Listed {len(files)} file(s)", observed_state_delta=delta)
 
     def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
         return ToolResult(True, "List files has no rollback side effect")
@@ -128,64 +102,43 @@ class ListFilesTool:
 class ReadFileTool:
     spec = ToolSpec(
         name="read_file",
-        description="Read a UTF-8 text file inside the workspace.",
+        description="Read a UTF-8 text file inside a workspace.",
         permissions=(Permission.READ_FILES,),
         default_risk=RiskLevel.LOW,
-        reversibility=Reversibility.IRREVERSIBLE,
         sandbox_policy=SandboxPolicy.WORKSPACE,
         filesystem_scope="workspace",
-        input_schema={
-            "type": "object",
-            "required": ["path"],
-            "properties": {
-                "path": {"type": "string"},
-                "max_bytes": {"type": "integer", "minimum": 1},
-            },
-            "additionalProperties": False,
-        },
-        output_schema={
-            "type": "object",
-            "required": ["file_read", "content", "truncated"],
-            "properties": {
-                "file_read": {"type": "string"},
-                "content": {"type": "string"},
-                "truncated": {"type": "boolean"},
-            },
-            "additionalProperties": False,
-        },
+        input_schema={"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}},
+        output_schema={"type": "object", "required": ["file_read", "content", "truncated"]},
     )
 
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root.resolve()
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        issues = self.spec.validate_input(arguments)
-        if issues:
-            return ToolResult(False, "Input schema validation failed", {"schema_issues": issues})
         try:
             path = _resolve_workspace_path(self.workspace_root, str(arguments["path"]))
         except WorkspaceEscapeBlocked as exc:
             return ToolResult(False, str(exc), error=exc)
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(False, str(exc), error=DryRunFailed(str(exc)))
         if not path.exists() or not path.is_file():
             return ToolResult(False, "File does not exist", error=DryRunFailed("File does not exist"))
+        if _is_binary(path):
+            return ToolResult(False, "Binary files are not supported", error=DryRunFailed("Binary file"))
         return ToolResult(True, f"Would read {path}")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        dry = self.dry_run(arguments, state)
-        if not dry.ok:
-            return dry
+        dry_run = self.dry_run(arguments, state)
+        if not dry_run.ok:
+            return dry_run
         path = _resolve_workspace_path(self.workspace_root, str(arguments["path"]))
         max_bytes = int(arguments.get("max_bytes", 65536))
         raw = path.read_bytes()
-        if _looks_binary(raw[: max_bytes + 1]):
-            return ToolResult(False, "Binary file rejected", error=DryRunFailed("Binary file rejected"))
         truncated = len(raw) > max_bytes
-        try:
-            content = raw[:max_bytes].decode("utf-8")
-        except UnicodeDecodeError as exc:
-            return ToolResult(False, "File is not valid UTF-8", error=DryRunFailed(str(exc)))
-        delta = {"file_read": _relpath(self.workspace_root, path), "content": content, "truncated": truncated}
-        return ToolResult(True, f"Read {path}", data=delta, observed_state_delta=delta)
+        content = raw[:max_bytes].decode("utf-8", errors="strict")
+        rel = path.relative_to(self.workspace_root).as_posix()
+        delta = {"file_read": rel, "content": content, "truncated": truncated}
+        return ToolResult(True, f"Read {rel}", observed_state_delta=delta)
 
     def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
         return ToolResult(True, "Read file has no rollback side effect")
@@ -194,87 +147,58 @@ class ReadFileTool:
 class PatchFileTool:
     spec = ToolSpec(
         name="patch_file",
-        description="Replace a workspace text file with new content.",
+        description="Replace a UTF-8 file inside a workspace with rollback support.",
         permissions=(Permission.WRITE_FILES,),
         default_risk=RiskLevel.MEDIUM,
         reversibility=Reversibility.REVERSIBLE,
         compensation_strategy=CompensationStrategy.UNDO,
         sandbox_policy=SandboxPolicy.WORKSPACE,
         filesystem_scope="workspace",
-        input_schema={
-            "type": "object",
-            "required": ["path", "new_content"],
-            "properties": {
-                "path": {"type": "string"},
-                "expected_previous": {"type": "string"},
-                "new_content": {"type": "string"},
-            },
-            "additionalProperties": False,
-        },
-        output_schema={
-            "type": "object",
-            "required": ["file_patched", "content_hash"],
-            "properties": {
-                "file_patched": {"type": "string"},
-                "content_hash": {"type": "string"},
-            },
-            "additionalProperties": False,
-        },
+        input_schema={"type": "object", "required": ["path", "new_content"]},
+        output_schema={"type": "object", "required": ["file_patched", "content_hash"]},
     )
 
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root.resolve()
-        self.workspace_root.mkdir(parents=True, exist_ok=True)
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        issues = self.spec.validate_input(arguments)
-        if issues:
-            return ToolResult(
-                False,
-                "Input schema validation failed",
-                {"schema_issues": issues},
-                error=SchemaValidationFailed("Input schema validation failed"),
-            )
         try:
             path = _resolve_workspace_path(self.workspace_root, str(arguments["path"]))
         except WorkspaceEscapeBlocked as exc:
             return ToolResult(False, str(exc), error=exc)
-        previous = None
-        if path.exists():
-            raw = path.read_bytes()
-            if _looks_binary(raw):
-                return ToolResult(False, "Binary file rejected", error=DryRunFailed("Binary file rejected"))
-            try:
-                previous = raw.decode("utf-8")
-            except UnicodeDecodeError as exc:
-                return ToolResult(False, "File is not valid UTF-8", error=DryRunFailed(str(exc)))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(False, str(exc), error=DryRunFailed(str(exc)))
+        if not isinstance(arguments.get("new_content"), str):
+            return ToolResult(False, "new_content must be a string", error=DryRunFailed("Invalid new_content"))
+        if path.exists() and _is_binary(path):
+            return ToolResult(False, "Binary files are not supported", error=DryRunFailed("Binary file"))
         expected = arguments.get("expected_previous")
-        if expected is not None and previous != expected:
-            return ToolResult(False, "expected_previous does not match current content")
-        return ToolResult(True, f"Would patch {path}", data={"path": str(path)})
+        if expected is not None:
+            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            if current != expected:
+                return ToolResult(False, "expected_previous mismatch", error=DryRunFailed("Content mismatch"))
+        return ToolResult(True, f"Would patch {path}")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        dry = self.dry_run(arguments, state)
-        if not dry.ok:
-            return dry
+        dry_run = self.dry_run(arguments, state)
+        if not dry_run.ok:
+            return dry_run
         path = _resolve_workspace_path(self.workspace_root, str(arguments["path"]))
+        previous = path.read_text(encoding="utf-8") if path.exists() else None
         existed = path.exists()
-        previous = path.read_text(encoding="utf-8") if existed else None
         new_content = str(arguments["new_content"])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(new_content, encoding="utf-8")
         digest = hashlib.sha256(new_content.encode("utf-8")).hexdigest()
-        delta = {"file_patched": str(path), "content_hash": digest}
         return ToolResult(
             True,
             f"Patched {path}",
-            data=delta,
-            observed_state_delta=delta,
-            rollback_token={"path": str(path), "existed": existed, "previous": previous},
+            observed_state_delta={"file_patched": str(path), "content_hash": digest},
+            rollback_token={"path": str(path), "previous": previous, "existed": existed},
         )
 
     def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
-        path = _resolve_workspace_path(self.workspace_root, str(token["path"]))
+        path = Path(str(token["path"]))
         if token.get("existed"):
             path.write_text(str(token.get("previous", "")), encoding="utf-8")
         else:
@@ -285,67 +209,39 @@ class PatchFileTool:
 class GitDiffTool:
     spec = ToolSpec(
         name="git_diff",
-        description="Return git diff for the workspace repository.",
+        description="Return git diff for the workspace.",
         permissions=(Permission.READ_FILES,),
         default_risk=RiskLevel.LOW,
-        reversibility=Reversibility.IRREVERSIBLE,
         sandbox_policy=SandboxPolicy.WORKSPACE,
         filesystem_scope="workspace",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "timeout_seconds": {"type": "number", "minimum": 0.1},
-                "max_output_bytes": {"type": "integer", "minimum": 1},
-            },
-            "additionalProperties": False,
-        },
-        output_schema={
-            "type": "object",
-            "required": ["git_diff", "truncated"],
-            "properties": {
-                "git_diff": {"type": "string"},
-                "truncated": {"type": "boolean"},
-            },
-            "additionalProperties": False,
-        },
+        output_schema={"type": "object", "required": ["git_diff", "truncated"]},
     )
 
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root.resolve()
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        issues = self.spec.validate_input(arguments)
-        if issues:
-            return ToolResult(False, "Input schema validation failed", {"schema_issues": issues})
-        if not (self.workspace_root / ".git").exists():
-            return ToolResult(False, "Workspace is not a git repository")
         return ToolResult(True, "Would run git diff")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        dry = self.dry_run(arguments, state)
-        if not dry.ok:
-            return dry
-        timeout = float(arguments.get("timeout_seconds", 10.0))
-        max_bytes = int(arguments.get("max_output_bytes", 65536))
-        git_bin = shutil.which("git")
-        if not git_bin:
-            return ToolResult(False, "git executable not found")
+        max_output = int(arguments.get("max_output_bytes", 65536))
         try:
-            proc = subprocess.run(  # nosec B603 - argv-only git invocation
-                [git_bin, "diff"],
+            proc = subprocess.run(  # nosec B603,B607
+                ["git", "diff"],
                 cwd=str(self.workspace_root),
                 capture_output=True,
                 text=True,
-                timeout=timeout,
+                timeout=float(arguments.get("timeout_seconds", 10)),
+                shell=False,  # nosec B603
             )
-        except subprocess.TimeoutExpired:
-            return ToolResult(False, "git diff timed out", error=ToolTimeout("git diff timed out"))
+        except Exception as exc:  # noqa: BLE001
+            return ToolResult(False, f"git diff failed: {exc}", error=LeosError(str(exc)))
         output = proc.stdout or ""
-        truncated = len(output) > max_bytes
-        delta = {"git_diff": output[:max_bytes], "truncated": truncated}
+        truncated = len(output) > max_output
+        output = output[:max_output]
         if proc.returncode != 0:
-            return ToolResult(False, proc.stderr or "git diff failed", data=delta)
-        return ToolResult(True, "git diff completed", data=delta, observed_state_delta=delta)
+            return ToolResult(False, "git diff failed", data={"stderr": proc.stderr, "returncode": proc.returncode})
+        return ToolResult(True, "Read git diff", observed_state_delta={"git_diff": output, "truncated": truncated})
 
     def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
         return ToolResult(True, "Git diff has no rollback side effect")
@@ -354,97 +250,62 @@ class GitDiffTool:
 class RunTestsTool:
     spec = ToolSpec(
         name="run_tests",
-        description="Run an argv-only test command inside the workspace.",
+        description="Run local test command inside the workspace.",
         permissions=(Permission.EXECUTE_CODE,),
         default_risk=RiskLevel.HIGH,
         reversibility=Reversibility.IRREVERSIBLE,
         compensation_strategy=CompensationStrategy.MANUAL,
         sandbox_policy=SandboxPolicy.WORKSPACE,
         filesystem_scope="workspace",
-        input_schema={
-            "type": "object",
-            "properties": {
-                "argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-                "timeout_seconds": {"type": "number", "minimum": 0.1},
-                "max_output_bytes": {"type": "integer", "minimum": 1},
-            },
-            "additionalProperties": False,
-        },
-        output_schema={
-            "type": "object",
-            "required": ["tests_ok", "returncode", "stdout", "stderr", "truncated"],
-            "properties": {
-                "tests_ok": {"type": "boolean"},
-                "returncode": {"type": ["integer", "null"]},
-                "stdout": {"type": "string"},
-                "stderr": {"type": "string"},
-                "truncated": {"type": "boolean"},
-            },
-            "additionalProperties": False,
-        },
+        secrets_allowed=False,
+        output_schema={"type": "object", "required": ["tests_ok", "returncode", "stdout", "stderr", "truncated"]},
     )
 
     def __init__(self, workspace_root: Path) -> None:
         self.workspace_root = workspace_root.resolve()
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        issues = self.spec.validate_input(arguments)
-        if issues:
-            return ToolResult(False, "Input schema validation failed", {"schema_issues": issues})
-        argv = arguments.get("argv", ["python", "-m", "unittest", "discover", "-s", "tests"])
-        if not isinstance(argv, list) or not all(isinstance(value, str) for value in argv):
-            return ToolResult(False, "argv must be a list of strings")
-        return ToolResult(True, f"Would run tests: {' '.join(argv)}")
+        command = arguments.get("argv", ["python", "-m", "unittest", "discover", "-s", "tests"])
+        if not isinstance(command, list) or not all(isinstance(part, str) for part in command):
+            return ToolResult(False, "argv must be a list of strings", error=DryRunFailed("Invalid argv"))
+        return ToolResult(True, "Would run tests")
 
     def execute(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
-        dry = self.dry_run(arguments, state)
-        if not dry.ok:
-            return dry
-        argv = [str(value) for value in arguments.get("argv", ["python", "-m", "unittest", "discover", "-s", "tests"])]
-        timeout = float(arguments.get("timeout_seconds", 60.0))
-        max_bytes = int(arguments.get("max_output_bytes", 65536))
+        dry_run = self.dry_run(arguments, state)
+        if not dry_run.ok:
+            return dry_run
+        command = list(arguments.get("argv", ["python", "-m", "unittest", "discover", "-s", "tests"]))
+        max_output = int(arguments.get("max_output_bytes", 65536))
         try:
-            proc = subprocess.run(  # nosec B603 - argv-only test command
-                argv,
+            proc = subprocess.run(  # nosec B603
+                command,
                 cwd=str(self.workspace_root),
                 capture_output=True,
                 text=True,
-                timeout=timeout,
-                env={},
+                timeout=float(arguments.get("timeout_seconds", 60)),
+                env=_safe_test_env(),
+                shell=False,
             )
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
-            returncode: int | None = proc.returncode
+            truncated = len(stdout) > max_output or len(stderr) > max_output
+            delta = {
+                "tests_ok": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout": stdout[:max_output],
+                "stderr": stderr[:max_output],
+                "truncated": truncated,
+            }
+            return ToolResult(proc.returncode == 0, "Tests completed", observed_state_delta=delta)
         except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout or ""
-            stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr or ""
-            returncode = None
-            delta = _test_delta(False, returncode, stdout, stderr, max_bytes)
-            return ToolResult(False, "Test command timed out", data=delta, observed_state_delta=delta)
-        delta = _test_delta(returncode == 0, returncode, stdout, stderr, max_bytes)
-        return ToolResult(
-            returncode == 0,
-            "Tests passed" if returncode == 0 else "Tests failed",
-            data=delta,
-            observed_state_delta=delta,
-        )
+            delta = {"tests_ok": False, "returncode": None, "stdout": "", "stderr": str(exc), "truncated": False}
+            return ToolResult(False, "Tests timed out", observed_state_delta=delta, error=LeosError("Tests timed out"))
 
     def rollback(self, token: Mapping[str, Any], state: WorldState) -> ToolResult:
         return ToolResult(True, "Run tests has no rollback capability")
 
 
-def _test_delta(ok: bool, returncode: int | None, stdout: str, stderr: str, max_bytes: int) -> dict[str, Any]:
-    truncated = len(stdout) > max_bytes or len(stderr) > max_bytes
-    return {
-        "tests_ok": ok,
-        "returncode": returncode,
-        "stdout": stdout[:max_bytes],
-        "stderr": stderr[:max_bytes],
-        "truncated": truncated,
-    }
-
-
-def default_dev_registry(workspace_root: Path, *, include_execute: bool = False) -> ToolRegistry:
+def default_dev_registry(workspace_root: Path, include_execute: bool = False) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(EchoTool())
     registry.register(ListFilesTool(workspace_root))

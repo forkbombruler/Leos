@@ -6,19 +6,12 @@
 - Exit code: `0`
 - Status: `passed`
 - Duration seconds: `0.009`
-- Started: `2026-05-13T10:53:24Z`
-- Finished: `2026-05-13T10:53:24Z`
+- Truncated: `False`
 
 ### stdout
 
 ```text
 All checks passed!
-
-```
-
-### stderr
-
-```text
 
 ```
 
@@ -28,19 +21,12 @@ All checks passed!
 - Exit code: `0`
 - Status: `passed`
 - Duration seconds: `0.008`
-- Started: `2026-05-13T10:53:24Z`
-- Finished: `2026-05-13T10:53:24Z`
+- Truncated: `False`
 
 ### stdout
 
 ```text
-64 files already formatted
-
-```
-
-### stderr
-
-```text
+63 files already formatted
 
 ```
 
@@ -49,19 +35,12 @@ All checks passed!
 - Command: `mypy src`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `0.144`
-- Started: `2026-05-13T10:53:24Z`
-- Finished: `2026-05-13T10:53:24Z`
+- Duration seconds: `0.148`
+- Truncated: `False`
 
 ### stdout
 
 ```text
 Success: no issues found in 32 source files
-
-```
-
-### stderr
-
-```text
 
 ```

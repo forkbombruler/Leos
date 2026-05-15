@@ -44,6 +44,27 @@ class NetworkFetchToolTests(unittest.TestCase):
         self.assertFalse(bad_scheme.ok)
         self.assertFalse(missing_host.ok)
 
+    def test_url_safety_policy_blocks_ssrf_targets(self) -> None:
+        tool = NetworkFetchTool()
+
+        for url in (
+            "http://localhost",
+            "http://127.0.0.1",
+            "http://10.0.0.1",
+            "http://172.16.0.1",
+            "http://192.168.1.1",
+            "http://169.254.169.254",
+            "http://user:pass@example.com",
+            "ftp://example.com",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(tool.dry_run({"url": url}, WorldState()).ok)
+
+    def test_url_safety_policy_allows_public_https(self) -> None:
+        result = NetworkFetchTool().dry_run({"url": "https://example.com"}, WorldState())
+
+        self.assertTrue(result.ok)
+
     def test_execute_wraps_content_as_untrusted_observation(self) -> None:
         def fake_fetcher(url: str, timeout: float, max_bytes: int) -> NetworkFetchResponse:
             self.assertEqual(url, "https://example.test/page")

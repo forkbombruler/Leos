@@ -1,13 +1,19 @@
 # Storage
 
-Leos currently supports in-memory and JSONL/JSON file stores plus SQLite-backed `TaskQueue`.
+The runtime currently provides an in-memory `TaskQueue` with optional SQLite
+persistence for task records and idempotency keys.
 
-Use in-memory stores for tests and short-lived demos. Use SQLite `TaskQueue(path=...)` for local long-running task persistence.
+Implemented:
 
-Known gaps:
+- task enqueue/reload
+- idempotency key dedupe across queue instances
+- claim, heartbeat, completion, retry, pause/resume, and watchdog timeout state
 
-- SQLite `AuditLog` is not implemented yet.
-- SQLite `MemoryStore` is not implemented yet.
-- TaskQueue SQLite concurrency is basic and should receive stronger multi-worker stress tests before production use.
+Not complete:
 
-Secrets must never be stored as memory values. Store secret references only.
+- SQLite-backed `AuditLog`
+- SQLite-backed `MemoryStore`
+- real concurrent worker stress testing
+
+Use the in-memory backend for short-lived tests and the SQLite task queue for
+local development scenarios that need task state to survive process restart.

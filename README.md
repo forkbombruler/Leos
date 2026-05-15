@@ -51,6 +51,20 @@ leos eval --suite safety
 python scripts/generate_proofs.py
 ```
 
+For development and audit checks:
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+ruff format --check .
+mypy src
+coverage run -m unittest discover -s tests
+coverage report --fail-under=83
+bandit -r src
+leos eval --suite safety
+python scripts/generate_proofs.py --output docs/proofs --allow-dirty
+```
+
 Run the demo:
 
 ```bash
@@ -59,56 +73,33 @@ leos-agent --auto-approve
 
 Without `--auto-approve`, the file-writing action is denied because it lacks a write-file grant and requires explicit approval.
 
-## Current Capability Matrix
+## Current capability matrix
 
-| Area | Status |
-| --- | --- |
-| Policy / approval gates | Implemented |
-| Audit hash-chain | Implemented |
-| Rollback for reversible writes | Implemented |
-| Dev agent workspace tools | Implemented, opt-in |
-| Network/browser tools | Implemented, opt-in, default blocked |
-| Code execution | Opt-in only |
-| Docker sandbox | Initial command-construction runner |
-| Safety evals | Implemented minimum suite |
-| Proof documents | Generated under `docs/proofs/` |
-| SQLite persistence | TaskQueue only |
+| Capability | Status |
+|---|---|
+| Workspace-scoped read/list/patch/diff tools | implemented |
+| Local test runner | opt-in, local-dev only |
+| Network fetch/browser observations | opt-in, marked `UNTRUSTED_EXTERNAL` |
+| URL SSRF checks | implemented regression guard |
+| Docker sandbox runner | initial command-construction support |
+| Safety eval suite | implemented regression suite |
+| Proof documents | generated audit aids, not formal proof |
+| Causal contracts | partial runtime enforcement |
+| Production autonomy | not ready |
 
-## Dev Agent Example
+High-risk tools are not enabled by default. Network tools and code execution
+must be explicitly registered and policy-gated. The workspace subprocess sandbox
+is not a production isolation boundary.
 
-```python
-from pathlib import Path
-from leos_agent import default_dev_registry
+## Proof documents
 
-registry = default_dev_registry(Path("."), include_execute=False)
-```
-
-`include_execute=False` keeps `run_tests` out of the registry. Enabling it adds a high-risk `EXECUTE_CODE` tool that still goes through policy and approval.
-
-## Safety And Proofs
+Proof documents under `docs/proofs/` bind command results to source and test file
+hashes. Dirty worktree proofs are marked `precommit_dirty` and are useful for
+local review only. After committing, generate release-grade evidence with:
 
 ```bash
-leos eval --suite safety
-leos trace --audit logs/latest.jsonl --format markdown
-python scripts/generate_proofs.py
+python scripts/generate_proofs.py --output docs/proofs --require-clean
 ```
-
-Proof documents record command, exit code, environment, git metadata, output excerpts, and known limitations. They are audit aids, not formal security proofs.
-
-## Sandbox Threat Model
-
-`WorkspaceSubprocessSandboxRunner` is for dev/test only and is not a production isolation boundary. High-risk command execution should use `DockerSandboxRunner` or a future microVM runner plus deployment-level network and secret controls.
-
-## Production Readiness Checklist
-
-- high-risk tools disabled by default
-- network disabled by default
-- code execution disabled by default
-- external observations marked `UNTRUSTED_EXTERNAL`
-- proof documents regenerated for release candidates
-- Docker/microVM sandbox selected for production code execution
-- egress proxy configured for network tools
-- secret manager integrated; no raw secrets in memory or audit logs
 
 ## Why this is not just another chatbot wrapper
 

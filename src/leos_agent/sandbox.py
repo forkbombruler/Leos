@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess  # nosec B404 — intentional subprocess sandboxing
+import subprocess  # nosec B404
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -102,7 +102,7 @@ class WorkspaceSubprocessSandboxRunner:
                 env[key] = command.env[key]
 
         try:
-            proc = subprocess.run(  # nosec B603 — workspace-scoped
+            proc = subprocess.run(  # nosec B603
                 command.argv,
                 capture_output=True,
                 cwd=str(cwd),
@@ -248,6 +248,8 @@ class DockerSandboxRunner:
             argv = self.build_argv(command)
         except SandboxUnavailable:
             raise
+        if shutil.which(argv[0]) is None:
+            raise SandboxUnavailable(f"{argv[0]} runtime is not available")
         timeout = min(command.timeout_seconds, self.timeout_seconds)
         try:
             proc = subprocess.run(  # nosec B603 - argv constructed without shell
@@ -311,10 +313,8 @@ class SandboxCommandTool:
         },
     )
 
-    def __init__(self, workspace_root: Path | None = None, *, runner: SandboxRunner | None = None) -> None:
-        if runner is None and workspace_root is None:
-            raise ValueError("workspace_root or runner is required")
-        self.runner = runner or WorkspaceSubprocessSandboxRunner(workspace_root or Path("."))
+    def __init__(self, workspace_root: Path, runner: SandboxRunner | None = None) -> None:
+        self.runner = runner or WorkspaceSubprocessSandboxRunner(workspace_root)
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
         argv = arguments.get("argv", [])

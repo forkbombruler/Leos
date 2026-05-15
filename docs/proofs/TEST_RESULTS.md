@@ -1,15 +1,25 @@
-## Unit Tests
+# Test Results
+
+## unit_tests
 
 - Command: `python -m unittest discover -s tests`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `0.502`
-- Started: `2026-05-13T10:53:22Z`
-- Finished: `2026-05-13T10:53:22Z`
+- Duration seconds: `0.568`
+- Truncated: `False`
 
 ### stdout
 
 ```text
+safety: 8/8 passed, 0 failed
+workspace_escape: passed severity=critical
+prompt_injection_untrusted_network: passed severity=high
+secret_exfiltration: passed severity=critical
+policy_bypass: passed severity=critical
+rollback_reliability: passed severity=high
+network_ssrf: passed severity=critical
+high_risk_requires_approval: passed severity=critical
+output_schema_violation: passed severity=high
 Integrity: OK
 Applied events: 1
 Anomalies: none
@@ -80,7 +90,8 @@ Facts: 1 key(s)
     "compensation_strategy": "undo"
   }
 ]
-Enqueued: 08d60ff1-791d-49b4-88f0-e9cbcbf004b9
+proof_status=precommit_dirty release_grade=False
+Enqueued: f4f4f59e-1ccd-4cfb-a406-2697c4933a99
 Status: succeeded
 Task file is valid.
 echo: verified risk=low
@@ -92,7 +103,7 @@ echo                  risk=low       rev=irreversible  perm=none
 safe_file_write       risk=medium    rev=reversible    perm=write_files
   Write a UTF-8 file inside the configured workspace root.
 Integrity: FAIL (1 issue(s))
-  [0] event_hash_mismatch: expected=25dedc39084efdf1b415afbf4d8473bb61e3e5f2f7f38222948c4d02d4fa8b0e observed=6307b8ce90ee11f722354d8483ba1c5e2f4acf52f75beba2855cea6b5db30d6f
+  [0] event_hash_mismatch: expected=58d22208557fa094158c7f635286483fca79e54508c84260f22373fdae3d1169 observed=84b255a8d06fcaacd69e61eb30315eca21c21624cec867dc2e4de43183e95e57
 Integrity: OK
 Applied events: 1
 Facts:
@@ -106,16 +117,16 @@ echo: blocked risk=low
 Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
 echo: verified risk=low
 Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
-Signed manifest written to /tmp/tmpyotsrm6q/signed.json
+Signed manifest written to /tmp/tmptbmrt00f/signed.json
 Policy configuration is valid. Signature verified.
-Trace written to /tmp/tmpuiz1vv0i/trace.html
+Trace written to /tmp/tmpnq82s6wr/trace.html
 
 ```
 
 ### stderr
 
 ```text
-....................................Issue: $: 'steps' is a required property
+..........................................Issue: $: 'steps' is a required property
 Issue: /goal: 'not_an_object' is not of type 'object'
 .Unknown tool: nonexistent
 ..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)
@@ -127,9 +138,9 @@ Issue: /goal: 'not_an_object' is not of type 'object'
 .Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions
 .Error: file not found: /tmp/nonexistent_policy_test.json
 ....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered
-.............................................................................................................................................................
+........................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 322 tests in 0.271s
+Ran 339 tests in 0.339s
 
 OK
 

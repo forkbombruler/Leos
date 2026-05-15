@@ -12,6 +12,7 @@ from .enums import (
     GoalStatus,
     Permission,
     Reversibility,
+    RiskLevel,
     SandboxPolicy,
     StepStatus,
     _risk_value,
@@ -119,7 +120,24 @@ class TransactionManager:
                 self._rollback(rollback_stack, state)
                 break
 
-            step.predictions = self.causal_model.predict(step, state)
+            contract = getattr(tool.spec, "causal_contract", None)
+            if contract is not None:
+                self.audit_log.record(
+                    "step.causal_contract_used",
+                    "Using tool causal contract",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    required_observations=list(getattr(contract, "required_observations", ())),
+                )
+            elif _risk_value(step.risk) >= _risk_value(RiskLevel.MEDIUM):
+                self.audit_log.record(
+                    "step.causal_contract_missing_warning",
+                    "Medium or higher risk tool has no causal contract",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    risk=step.risk.value,
+                )
+            step.predictions = self.causal_model.predict_for_tool(step, state, tool=tool)
             step.counterfactual_report = self.counterfactual_review.review(step, state, step.predictions)
 
             if self._idempotency_conflict(step, state):
@@ -211,6 +229,30 @@ class TransactionManager:
                 )
                 self._rollback(rollback_stack, state)
                 break
+
+            contract_missing = self._missing_contract_observations(tool, result)
+            if contract_missing:
+                step.status = StepStatus.FAILED
+                error = SchemaValidationFailed("Causal contract required observations missing")
+                self.audit_log.record(
+                    "step.causal_contract_verification_failed",
+                    "Causal contract required observations missing",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    missing=contract_missing,
+                    observed=list(result.observed_state_delta),
+                    error_type=type(error).__name__,
+                )
+                self._rollback(rollback_stack, state)
+                break
+            if contract is not None:
+                self.audit_log.record(
+                    "step.causal_contract_verified",
+                    "Causal contract required observations verified",
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    required_observations=list(getattr(contract, "required_observations", ())),
+                )
 
             state.observe(result.observed_state_delta, trust_level=TrustLevel.TOOL_REPORTED)
             self.audit_log.record(
@@ -346,6 +388,13 @@ class TransactionManager:
         grant = self.policy._matching_grant(step.tool_name)
         if grant is not None:
             grant.record_use()
+
+    @staticmethod
+    def _missing_contract_observations(tool: Tool, result: ToolResult) -> list[str]:
+        contract = getattr(tool.spec, "causal_contract", None)
+        if contract is None:
+            return []
+        return list(contract.missing_required_observations(result.observed_state_delta))
 
     def _hydrate_step_metadata(self, step: ActionStep, tool: Tool) -> None:
         step.required_permissions = tuple(tool.spec.permissions)

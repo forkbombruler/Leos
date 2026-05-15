@@ -28,10 +28,10 @@ from .core import (
     validate_policy_config,
     verify_policy_manifest,
 )
-from .eval_runner import format_eval_report, run_safety_evals
+from .eval_runner import format_eval_report, render_eval_report_markdown, run_safety_evals
 from .manifest import validate_task_file
 from .policy import InteractiveApprovalGate
-from .proof import generate_proofs
+from .proof import exit_code_for_manifest, generate_proofs
 from .task_queue import TaskQueue, TaskRunner
 from .trace_viewer import render_trace_html, render_trace_markdown
 
@@ -120,19 +120,23 @@ def main() -> int:
     trace_parser.add_argument("--output", default=None, help="Output HTML path (default: stdout).")
     trace_parser.add_argument("--title", default="Leos Trace", help="HTML page title.")
 
-    trace2_parser = sub.add_parser("trace", help="Render an audit log as markdown or HTML.")
+    trace2_parser = sub.add_parser("trace", help="Render an audit log trace.")
     trace2_parser.add_argument("--audit", required=True, help="Path to a JSONL audit log file.")
     trace2_parser.add_argument("--format", choices=("markdown", "html"), default="markdown")
     trace2_parser.add_argument("--output", default=None, help="Output path (default: stdout).")
-    trace2_parser.add_argument("--title", default="Leos Trace", help="Trace title.")
+    trace2_parser.add_argument("--title", default="Leos Trace", help="HTML page title.")
 
-    eval_parser = sub.add_parser("eval", help="Run Leos evaluation suites.")
+    eval_parser = sub.add_parser("eval", help="Run evaluation suites.")
     eval_parser.add_argument("--suite", choices=("safety",), default="safety")
+    eval_parser.add_argument("--format", choices=("text", "markdown"), default="text")
 
-    proof_parser = sub.add_parser("proof", help="Generate proof documents.")
+    proof_parser = sub.add_parser("proof", help="Proof document commands.")
     proof_sub = proof_parser.add_subparsers(dest="proof_command")
     proof_generate = proof_sub.add_parser("generate", help="Generate proof documents.")
-    proof_generate.add_argument("--output", default="docs/proofs", help="Output directory.")
+    proof_generate.add_argument("--output", default="docs/proofs")
+    proof_generate.add_argument("--require-clean", action="store_true")
+    proof_generate.add_argument("--allow-dirty", action="store_true")
+    proof_generate.add_argument("--no-run", action="store_true")
 
     manifest_parser = sub.add_parser("manifest", help="Output registered tool manifests as JSON.")
     manifest_parser.add_argument("--workspace", default=".leos-workspace", help="Workspace root.")
@@ -172,13 +176,13 @@ def main() -> int:
     if args.command == "trace-html":
         return _trace_html(args.file, output=args.output, title=args.title)
     if args.command == "trace":
-        return _trace(args.audit, output=args.output, title=args.title, output_format=args.format)
+        return _trace(args.audit, output=args.output, output_format=args.format, title=args.title)
     if args.command == "eval":
-        return _eval(args.suite)
+        return _eval(args.suite, output_format=args.format)
     if args.command == "proof":
         if args.proof_command == "generate":
-            return _proof_generate(args.output)
-        print("Error: proof subcommand required", file=sys.stderr)
+            return _proof_generate(args.output, args.require_clean, args.allow_dirty, args.no_run)
+        print("Error: missing proof subcommand", file=sys.stderr)
         return 2
     if args.command == "manifest":
         return _manifest(args.workspace)
@@ -579,16 +583,17 @@ def _trace_html(file_path: str, *, output: str | None, title: str) -> int:
     return 0
 
 
-def _trace(file_path: str, *, output: str | None, title: str, output_format: str) -> int:
+def _trace(file_path: str, *, output: str | None, output_format: str, title: str) -> int:
     path = Path(file_path)
     if not path.exists():
         print(f"Error: file not found: {file_path}", file=sys.stderr)
         return 2
     log = AuditLog(path=path)
-    if output_format == "html":
-        rendered = render_trace_html(log.records(), title=title)
-    else:
-        rendered = render_trace_markdown(log.records(), title=title)
+    rendered = (
+        render_trace_html(log.records(), title=title)
+        if output_format == "html"
+        else render_trace_markdown(log.records())
+    )
     if output:
         Path(output).write_text(rendered, encoding="utf-8")
         print(f"Trace written to {output}")
@@ -597,19 +602,29 @@ def _trace(file_path: str, *, output: str | None, title: str, output_format: str
     return 0
 
 
-def _eval(suite: str) -> int:
+def _eval(suite: str, *, output_format: str) -> int:
     if suite != "safety":
-        print(f"Error: unknown eval suite: {suite}", file=sys.stderr)
+        print(f"Error: unsupported eval suite: {suite}", file=sys.stderr)
         return 2
     report = run_safety_evals()
-    print(format_eval_report(report))
+    if output_format == "markdown":
+        sys.stdout.write(render_eval_report_markdown(report))
+    else:
+        print(format_eval_report(report))
+        for case in report.cases:
+            print(f"{case.name}: {case.status} severity={case.severity}")
     return 0 if report.failed == 0 else 1
 
 
-def _proof_generate(output: str) -> int:
-    manifest = generate_proofs(Path(output))
-    print(f"Proof documents written to {output}")
-    return 0 if manifest.summary.get("failed", 0) == 0 else 1
+def _proof_generate(output: str, require_clean: bool, allow_dirty: bool, no_run: bool) -> int:
+    manifest = generate_proofs(
+        Path(output),
+        require_clean=require_clean,
+        allow_dirty=allow_dirty,
+        no_run=no_run,
+    )
+    print(f"proof_status={manifest.proof_status} release_grade={manifest.release_grade}")
+    return exit_code_for_manifest(manifest)
 
 
 def _manifest(workspace: str) -> int:

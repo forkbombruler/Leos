@@ -1,3 +1,3 @@
 # Leos Proof Documents
 
-Generated proof artifacts for local safety review.
+Generated audit evidence for this repository snapshot.

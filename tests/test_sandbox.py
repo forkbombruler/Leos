@@ -11,6 +11,7 @@ from leos_agent.errors import SandboxViolation, WorkspaceEscapeBlocked
 from leos_agent.policy import PolicyEngine
 from leos_agent.sandbox import (
     ContainerSandboxRunner,
+    DockerSandboxRunner,
     MicroVMSandboxRunner,
     SandboxCommand,
     SandboxCommandTool,
@@ -88,6 +89,30 @@ class ContainerMicroVMPlaceholderTests(unittest.TestCase):
         runner = ContainerSandboxRunner()
         with self.assertRaises(SandboxUnavailable):
             runner.run(SandboxCommand(argv=["echo", "x"]))
+
+
+class DockerSandboxRunnerTests(unittest.TestCase):
+    def test_build_argv_contains_hardening_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = DockerSandboxRunner(Path(tmp), runtime="docker")
+            argv = runner.build_argv(SandboxCommand(argv=["python", "-V"]))
+
+        self.assertIn("--network", argv)
+        self.assertIn("none", argv)
+        self.assertIn("--cap-drop", argv)
+        self.assertIn("ALL", argv)
+        self.assertIn("--security-opt", argv)
+        self.assertIn("no-new-privileges", argv)
+        self.assertIn("--memory", argv)
+        self.assertIn("--cpus", argv)
+        self.assertIn("--pids-limit", argv)
+        self.assertIn("--read-only", argv)
+
+    def test_unavailable_runtime_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = DockerSandboxRunner(Path(tmp), runtime="definitely-missing-runtime")
+            with self.assertRaises(SandboxUnavailable):
+                runner.run(SandboxCommand(argv=["echo", "x"]))
 
     def test_microvm_raises_unavailable(self) -> None:
         runner = MicroVMSandboxRunner()

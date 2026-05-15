@@ -1,19 +1,16 @@
 # Sandboxing
 
-Leos has three sandbox levels:
+Leos currently supports multiple sandbox runner shapes:
 
-- `WorkspaceSubprocessSandboxRunner`: development and testing only. It scopes cwd to a workspace but is not an OS security boundary.
-- `DockerSandboxRunner`: initial production-oriented container boundary. It constructs docker/podman argv with network disabled, dropped capabilities, no-new-privileges, resource limits, tmpfs `/tmp`, and a non-root user by default.
-- `MicroVMSandboxRunner`: future target for high-risk workloads.
+- `WorkspaceSubprocessSandboxRunner`: development and test runner scoped to a
+  workspace path. It is not a production isolation boundary.
+- `DockerSandboxRunner`: initial Docker/podman command builder with hardening
+  flags such as `--network none`, `--cap-drop ALL`,
+  `--security-opt no-new-privileges`, memory/CPU/PID limits, read-only rootfs,
+  and `/tmp` tmpfs.
+- `MicroVMSandboxRunner`: future high-risk isolation target.
 
-Docker runner defaults:
+The Docker runner is unit-tested for command construction. CI does not prove full
+container isolation because it may not have Docker or podman available.
 
-- image: `python:3.12-slim`
-- workspace mount: resolved host path mounted to `/workspace`
-- network: `--network none`
-- capabilities: `--cap-drop ALL`
-- security: `--security-opt no-new-privileges`
-- memory/cpu/pids limits enabled
-- root filesystem read-only
-
-CI tests validate command construction with mocks and do not require Docker to be installed.
+High-risk code execution must remain opt-in and policy-gated.
