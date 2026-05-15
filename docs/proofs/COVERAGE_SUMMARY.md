@@ -4,40 +4,193 @@
 
 - Command: `coverage run -m unittest discover -s tests`
 - Exit code: `0`
-- Status: `skipped`
-- Duration seconds: `0.000`
-- Started: `2026-05-15T10:19:31Z`
-- Finished: `2026-05-15T10:19:31Z`
+- Status: `passed`
+- Duration seconds: `1.081`
+- Started: `2026-05-15T10:22:48Z`
+- Finished: `2026-05-15T10:22:49Z`
 
 ### stdout
 
 ```text
+Integrity: OK
+Applied events: 1
+Anomalies: none
+Facts: 1 key(s)
+[
+  {
+    "name": "echo",
+    "version": "0.1.0",
+    "permissions": [],
+    "risk": "low",
+    "reversibility": "irreversible",
+    "input_schema": {},
+    "output_schema": {},
+    "timeout_ms": 3000,
+    "network_access": false,
+    "filesystem_scope": "none",
+    "secrets_allowed": false,
+    "sandbox_policy": "none",
+    "requires_human_for": [],
+    "rollback_reliability": 1.0,
+    "compensation_strategy": "none"
+  },
+  {
+    "name": "safe_file_write",
+    "version": "0.1.0",
+    "permissions": [
+      "write_files"
+    ],
+    "risk": "medium",
+    "reversibility": "reversible",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "path",
+        "content"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "file_written": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "file_written": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "timeout_ms": 3000,
+    "network_access": false,
+    "filesystem_scope": "workspace",
+    "secrets_allowed": false,
+    "sandbox_policy": "workspace",
+    "requires_human_for": [
+      "outside_workspace"
+    ],
+    "rollback_reliability": 1.0,
+    "compensation_strategy": "undo"
+  }
+]
+Enqueued: 7bf5c986-a7ea-4f4b-b9e8-ca060cc4b27b
+Status: succeeded
+Task file is valid.
+echo: verified risk=low
+Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
+FAIL: Missing required argument: message
+OK: Would echo: hi
+echo                  risk=low       rev=irreversible  perm=none
+  Return a message and record it in observed state.
+safe_file_write       risk=medium    rev=reversible    perm=write_files
+  Write a UTF-8 file inside the configured workspace root.
+Integrity: FAIL (1 issue(s))
+  [0] event_hash_mismatch: expected=6cd23d76e28e76efad8296bc72ed0e8d0a401550cfea6cfea34662e661413a56 observed=0343a46d387a80163a10c7b7522343fbe132b1552c5184b3fc4d167649181f80
+Integrity: OK
+Applied events: 1
+Facts:
+  key = 'val'  [TrustLevel.TOOL_REPORTED]
+echo: verified risk=low
+Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
+safe_file_write: blocked risk=medium (permission requires human approval)
+Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
+Policy configuration is valid.
+echo: blocked risk=low
+Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
+echo: verified risk=low
+Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
+Signed manifest written to /tmp/tmpoxb60a1x/signed.json
+Policy configuration is valid. Signature verified.
+Trace written to /tmp/tmppxwdax_3/trace.html
 
 ```
 
 ### stderr
 
 ```text
-require-clean refused dirty worktree
+....................................Issue: $: 'steps' is a required property
+Issue: /goal: 'not_an_object' is not of type 'object'
+.Unknown tool: nonexistent
+..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)
+...Error: unknown tool 'nonexistent'. Available: echo, safe_file_write
+...Error: file not found: /tmp/nonexistent_replay_test.jsonl
+...Error: invalid profile 'nonexistent_profile': 'Unknown policy profile: nonexistent_profile'
+.Error: file not found: /tmp/nonexistent_run_test.json
+..Error: invalid JSON: Expecting value: line 1 column 1 (char 0)
+.Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions
+.Error: file not found: /tmp/nonexistent_policy_test.json
+....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered
+.............................................................................................................................................................
+----------------------------------------------------------------------
+Ran 322 tests in 0.665s
+
+OK
+
 ```
 
 ## coverage_report
 
 - Command: `coverage report`
-- Exit code: `0`
-- Status: `skipped`
-- Duration seconds: `0.000`
-- Started: `2026-05-15T10:19:31Z`
-- Finished: `2026-05-15T10:19:31Z`
+- Exit code: `2`
+- Status: `failed`
+- Duration seconds: `0.420`
+- Started: `2026-05-15T10:22:49Z`
+- Finished: `2026-05-15T10:22:49Z`
 
 ### stdout
 
 ```text
+Name                                Stmts   Miss Branch BrPart  Cover
+---------------------------------------------------------------------
+src/leos_agent/__init__.py              3      0      0      0   100%
+src/leos_agent/audit.py               132      7     46     11    90%
+src/leos_agent/causal.py               87      3     16      2    95%
+src/leos_agent/causal_contract.py      34      2      4      1    92%
+src/leos_agent/cli.py                 449    211    168     28    50%
+src/leos_agent/conflicts.py            37      0     14      0   100%
+src/leos_agent/core.py                 30      0      0      0   100%
+src/leos_agent/dev_tools.py           222     40     56     17    78%
+src/leos_agent/enums.py                71      0      0      0   100%
+src/leos_agent/errors.py               23      0      0      0   100%
+src/leos_agent/eval_runner.py         172     11      4      0    93%
+src/leos_agent/goals.py                72      6     14      2    88%
+src/leos_agent/kernel.py               43      2      6      2    92%
+src/leos_agent/manifest.py             54      2      8      1    95%
+src/leos_agent/memory.py              102      5     22      6    91%
+src/leos_agent/model.py                47      0      2      1    98%
+src/leos_agent/network_tools.py       155     25     44      6    83%
+src/leos_agent/planner.py             142     12     54     15    86%
+src/leos_agent/plans.py                86      2      8      3    95%
+src/leos_agent/policy.py              270     47    106     17    80%
+src/leos_agent/policy_manifest.py      51      9     12      5    78%
+src/leos_agent/prompts.py              30      1      2      1    94%
+src/leos_agent/proof.py               200     36     26      7    79%
+src/leos_agent/replay.py              122     10     80     15    86%
+src/leos_agent/sandbox.py             139     25     34     10    80%
+src/leos_agent/serialization.py        67      1      6      1    97%
+src/leos_agent/simulation.py           65      0      6      1    99%
+src/leos_agent/state.py                39      1     10      3    92%
+src/leos_agent/task_queue.py          242     23     50      9    88%
+src/leos_agent/tools.py               140      7     26      9    90%
+src/leos_agent/trace_viewer.py         32      1      8      2    92%
+src/leos_agent/transactions.py        275     27    104     12    88%
+---------------------------------------------------------------------
+TOTAL                                3633    516    936    187    82%
+Coverage failure: total of 82 is less than fail-under=83
 
 ```
 
 ### stderr
 
 ```text
-require-clean refused dirty worktree
+
 ```

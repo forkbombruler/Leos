@@ -1,16 +1,13 @@
 {
-  "generated_at": "2026-05-15T10:19:31Z",
-  "proof_status": "failed_dirty_worktree",
-  "release_grade": false,
-  "dirty_worktree": true,
-  "warnings": [
-    "This proof was generated from a dirty worktree and is not release-grade evidence.",
-    "--require-clean refused dirty worktree."
-  ],
+  "generated_at": "2026-05-15T10:22:51Z",
+  "proof_status": "release_grade",
+  "release_grade": true,
+  "dirty_worktree": false,
+  "warnings": [],
   "git": {
-    "commit_sha": "1e224b2b8afe3e3055f6ba0e865edcd98c6535ae",
-    "branch": "main",
-    "dirty_worktree": true
+    "commit_sha": "511e69b2a4b873d25480fe49d3ac190aeba038f4",
+    "branch": "fix/proof-require-clean",
+    "dirty_worktree": false
   },
   "environment": {
     "python_version": "3.14.4 (main, Apr 16 2026, 00:00:00) [GCC 16.0.1 20260321 (Red Hat 16.0.1-0)]",
@@ -23,8 +20,8 @@
       "name": "unit_tests",
       "command": "python -m unittest discover -s tests",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.49008053800025664,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -32,8 +29,8 @@
       "name": "safety_evals",
       "command": "leos eval --suite safety",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.17965904499942553,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -41,17 +38,17 @@
       "name": "coverage_run",
       "command": "coverage run -m unittest discover -s tests",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 1.0810915980000573,
       "stdout_path": null,
       "stderr_path": null
     },
     {
       "name": "coverage_report",
       "command": "coverage report",
-      "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "exit_code": 2,
+      "status": "failed",
+      "duration_seconds": 0.4199602739990951,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -59,8 +56,8 @@
       "name": "ruff_check",
       "command": "ruff check .",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.010973009999361238,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -68,8 +65,8 @@
       "name": "ruff_format_check",
       "command": "ruff format --check .",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.011297282999294112,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -77,8 +74,8 @@
       "name": "mypy",
       "command": "mypy src",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.496798227999534,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -86,8 +83,8 @@
       "name": "bandit",
       "command": "bandit -r src",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.6541775120003877,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -95,8 +92,8 @@
       "name": "leos_help",
       "command": "leos --help",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.17818369000087841,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -104,8 +101,8 @@
       "name": "leos_eval_help",
       "command": "leos eval --help",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.17430153499844891,
       "stdout_path": null,
       "stderr_path": null
     },
@@ -113,16 +110,16 @@
       "name": "leos_trace_help",
       "command": "leos trace --help",
       "exit_code": 0,
-      "status": "skipped",
-      "duration_seconds": 0.0,
+      "status": "passed",
+      "duration_seconds": 0.1757245190001413,
       "stdout_path": null,
       "stderr_path": null
     }
   ],
   "summary": {
     "total": 11,
-    "passed": 0,
-    "failed": 0,
-    "skipped": 11
+    "passed": 10,
+    "failed": 1,
+    "skipped": 0
   }
 }

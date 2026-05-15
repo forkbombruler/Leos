@@ -1,25 +1,22 @@
 # Proof Index
 
-Proof status: `failed_dirty_worktree`
+Proof status: `release_grade`
 
-Release grade: `False`
+Release grade: `True`
 
-Generated: 2026-05-15T10:19:31Z
+Generated: 2026-05-15T10:22:51Z
 
-Commit: 1e224b2b8afe3e3055f6ba0e865edcd98c6535ae
+Commit: 511e69b2a4b873d25480fe49d3ac190aeba038f4
 
-Branch: main
+Branch: fix/proof-require-clean
 
-Dirty worktree: True
+Dirty worktree: False
 
-Summary: {'total': 11, 'passed': 0, 'failed': 0, 'skipped': 11}
+Summary: {'total': 11, 'passed': 10, 'failed': 1, 'skipped': 0}
 
 ## Warnings
 
-- WARNING: This proof was generated from a dirty worktree and is not release-grade evidence.
-- WARNING: --require-clean refused dirty worktree.
-
-**WARNING: This proof was generated from a dirty worktree. It is useful for local review but not release-grade evidence.**
+- none
 
 ## Documents
 
