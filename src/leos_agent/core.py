@@ -231,7 +231,6 @@ __all__ = [
     "ProofManifest",
     "PostconditionFailed",
     "PreconditionFailed",
-    "ProofCommandResult",
     "ProofManifest",
     "Reversibility",
     "RiskLevel",

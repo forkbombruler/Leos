@@ -6,9 +6,8 @@ import ipaddress
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html.parser import HTMLParser
-from ipaddress import IPv4Address, IPv6Address, ip_address
 from typing import Any
 from urllib.parse import urlparse
 
