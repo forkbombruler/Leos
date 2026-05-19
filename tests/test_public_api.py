@@ -134,11 +134,15 @@ class PublicAPITests(unittest.TestCase):
             UrllibGitHubTransport,
         )
 
+    def test_core_exports_github_issue_plan_provider(self) -> None:
+        from leos_agent.core import GitHubIssuePlanConfig, GitHubIssuePlanProvider  # noqa: F401
+
     def test_package_exports_new_runtime_api(self) -> None:
         import leos_agent
 
         self.assertTrue(hasattr(leos_agent, "AgentLoop"))
         self.assertTrue(hasattr(leos_agent, "GoalEvaluator"))
+        self.assertTrue(hasattr(leos_agent, "GitHubIssuePlanProvider"))
         self.assertTrue(hasattr(leos_agent, "GitHubRESTClient"))
         self.assertTrue(hasattr(leos_agent, "LocalHTTPModelClient"))
         self.assertTrue(hasattr(leos_agent, "InMemoryGitHubClient"))
