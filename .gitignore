@@ -1,9 +1,34 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-.pytest_cache/
-.coverage
-.leos-workspace/
+*.py[cod]
+*.egg-info/
 dist/
 build/
-*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MyPy
+.mypy_cache/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Leos runtime artifacts
+.leos-workspace/
+*.leos-audit.jsonl

@@ -208,7 +208,9 @@ class AgentLoop:
                 stop_reason = self._stop_reason(current_goal)
             if stop_reason:
                 break
-            stop_reason = "max_iterations_reached"
+            # Only set max_iterations fallback if we haven't already found a stop reason
+            if not stop_reason:
+                stop_reason = "max_iterations_reached"
 
         iterations = (
             len(selected_plans)

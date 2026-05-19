@@ -36,6 +36,40 @@ from .task_queue import TaskQueue, TaskRunner
 from .trace_viewer import render_trace_html, render_trace_markdown
 
 
+# ── CLI error-handling helpers ────────────────────────────────────────
+
+
+def _check_file_exists(file_path: str) -> Path | None:
+    """Return resolved Path if the file exists; print error and return None otherwise."""
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return None
+    return path
+
+
+def _load_json_file(file_path: str) -> tuple[dict | None, int | None]:
+    """Load and parse a JSON file from *file_path*.
+
+    Returns (data, None) on success or (None, exit_code) on failure.
+    """
+    path = _check_file_exists(file_path)
+    if path is None:
+        return None, 2
+    try:
+        with open(path) as f:
+            return json.load(f), None
+    except FileNotFoundError:
+        print(f"Error: file not found: {file_path}", file=sys.stderr)
+        return None, 2
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
+        return None, 2
+
+
+# ── agent builder ─────────────────────────────────────────────────────
+
+
 def build_demo_agent(workspace: Path, auto_approve: bool) -> AgentKernel:
     registry = default_registry(workspace)
     policy = PolicyEngine()
@@ -217,15 +251,10 @@ def main() -> int:
 
 
 def _validate_policy(file_path: str, *, secret: str | None = None) -> int:
-    try:
-        with open(file_path) as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
-        return 2
-    except json.JSONDecodeError as exc:
-        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
-        return 2
+    result = _load_json_file(file_path)
+    if result[0] is None:
+        return result[1]  # type: ignore[return-value]
+    data = result[0]
 
     if secret is not None:
         try:
@@ -287,9 +316,8 @@ def _dry_run(tool_name: str, args_json: str, workspace: str) -> int:
 
 
 def _replay(file_path: str, *, verify: bool) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+    path = _check_file_exists(file_path)
+    if path is None:
         return 2
     log = AuditLog(path=path)
     result = replay_audit_log(log, verify_integrity=verify)
@@ -347,16 +375,10 @@ def _run(
     principal: str | None = None,
     cli_secrets: list[str] | None = None,
 ) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
-        return 2
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except json.JSONDecodeError as exc:
-        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
-        return 2
+    result = _load_json_file(file_path)
+    if result[0] is None:
+        return result[1]  # type: ignore[return-value]
+    data = result[0]
 
     schema_issues = validate_task_file(data)
     if schema_issues:
@@ -364,8 +386,7 @@ def _run(
             print(f"Error: {issue['path']}: {issue['reason']}", file=sys.stderr)
         return 2
 
-    goal_data = data["goal"]
-    steps_data = data["steps"]
+    goal_data = data.get("goal")
     steps_data = data.get("steps")
     if not isinstance(goal_data, dict):
         print("Error: missing or invalid 'goal' in file", file=sys.stderr)
@@ -461,15 +482,10 @@ def _run(
 
 
 def _sign_policy(file_path: str, secret: str, output: str | None) -> int:
-    try:
-        with open(file_path) as f:
-            policy_data = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
-        return 2
-    except json.JSONDecodeError as exc:
-        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
-        return 2
+    result = _load_json_file(file_path)
+    if result[0] is None:
+        return result[1]  # type: ignore[return-value]
+    policy_data = result[0]
     manifest = sign_policy(policy_data, secret)
     output_json = manifest_to_json(manifest)
     if output:
@@ -481,9 +497,8 @@ def _sign_policy(file_path: str, secret: str, output: str | None) -> int:
 
 
 def _audit_check(file_path: str) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+    path = _check_file_exists(file_path)
+    if path is None:
         return 2
     log = AuditLog(path=path)
     detector = AuditAnomalyDetector()
@@ -499,16 +514,10 @@ def _audit_check(file_path: str) -> int:
 
 
 def _validate_task(file_path: str, workspace: str) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
-        return 2
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except json.JSONDecodeError as exc:
-        print(f"Error: invalid JSON: {exc}", file=sys.stderr)
-        return 2
+    result = _load_json_file(file_path)
+    if result[0] is None:
+        return result[1]  # type: ignore[return-value]
+    data = result[0]
     issues = validate_task_file(data)
     if issues:
         for issue in issues:
@@ -535,9 +544,8 @@ def _validate_task(file_path: str, workspace: str) -> int:
 
 
 def _inspect_audit(file_path: str) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+    path = _check_file_exists(file_path)
+    if path is None:
         return 2
     log = AuditLog(path=path)
     result = replay_audit_log(log, verify_integrity=True)
@@ -569,9 +577,8 @@ def _inspect_audit(file_path: str) -> int:
 
 
 def _trace_html(file_path: str, *, output: str | None, title: str) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+    path = _check_file_exists(file_path)
+    if path is None:
         return 2
     log = AuditLog(path=path)
     html_doc = render_trace_html(log.records(), title=title)
@@ -584,9 +591,8 @@ def _trace_html(file_path: str, *, output: str | None, title: str) -> int:
 
 
 def _trace(file_path: str, *, output: str | None, output_format: str, title: str) -> int:
-    path = Path(file_path)
-    if not path.exists():
-        print(f"Error: file not found: {file_path}", file=sys.stderr)
+    path = _check_file_exists(file_path)
+    if path is None:
         return 2
     log = AuditLog(path=path)
     rendered = (

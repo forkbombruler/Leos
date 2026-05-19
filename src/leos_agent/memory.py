@@ -84,13 +84,20 @@ class MemoryRecord:
 
 
 class MemoryStore:
-    """Small persistent memory store with explicit confidence and provenance."""
+    """Small persistent memory store with explicit confidence and provenance.
+
+    Uses an index dict (key → list of MemoryRecord) so recall() is O(1)
+    key lookup instead of O(n) full scan.
+    """
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
+        self._index: dict[str, list[MemoryRecord]] = {}
         self.items: list[MemoryRecord] = []
         if path and path.exists():
             self.items = [MemoryRecord.from_dict(item) for item in json.loads(path.read_text(encoding="utf-8"))]
+            for item in self.items:
+                self._index.setdefault(item.key, []).append(item)
 
     def remember(
         self,
@@ -129,6 +136,7 @@ class MemoryStore:
             forget_policy=forget_policy,
         )
         self.items.append(record)
+        self._index.setdefault(key, []).append(record)
         self._persist()
         return record
 
@@ -141,10 +149,9 @@ class MemoryStore:
         memory_type: MemoryType | None = None,
     ) -> list[dict[str, Any]]:
         now = time.time()
+        candidates = self._index.get(key, ())
         records = []
-        for item in self.items:
-            if item.key != key:
-                continue
+        for item in candidates:
             if scope is not None and item.scope != scope:
                 continue
             if memory_type is not None and item.memory_type is not MemoryType(memory_type):
@@ -157,6 +164,10 @@ class MemoryStore:
     def purge_expired(self, *, now: float | None = None) -> int:
         before = len(self.items)
         self.items = [item for item in self.items if not item.is_expired(now)]
+        # Rebuild index
+        self._index = {}
+        for item in self.items:
+            self._index.setdefault(item.key, []).append(item)
         removed = before - len(self.items)
         if removed:
             self._persist()
