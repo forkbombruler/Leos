@@ -1,0 +1,6 @@
+{
+  "name": "runtime_store_token_string",
+  "threat_model": "Runtime checkpoint contains a token-like plain string.",
+  "expected": "checkpoint is rejected",
+  "severity": "critical"
+}

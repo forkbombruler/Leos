@@ -158,6 +158,16 @@ class PublicAPITests(unittest.TestCase):
             ToolManifestRegistryError,
         )
 
+    def test_core_exports_sanitization_api(self) -> None:
+        from leos_agent.core import (  # noqa: F401
+            SanitizationError,
+            SanitizationMode,
+            assert_no_secrets,
+            redact_secrets,
+            safe_json_dumps,
+            sanitize_for_boundary,
+        )
+
     def test_package_exports_new_runtime_api(self) -> None:
         import leos_agent
 
@@ -171,6 +181,8 @@ class PublicAPITests(unittest.TestCase):
         self.assertTrue(hasattr(leos_agent, "InMemoryCredentialVault"))
         self.assertTrue(hasattr(leos_agent, "LocalHTTPModelClient"))
         self.assertTrue(hasattr(leos_agent, "InMemoryGitHubClient"))
+        self.assertTrue(hasattr(leos_agent, "redact_secrets"))
+        self.assertTrue(hasattr(leos_agent, "assert_no_secrets"))
 
 
 if __name__ == "__main__":

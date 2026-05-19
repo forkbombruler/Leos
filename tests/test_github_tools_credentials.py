@@ -26,7 +26,8 @@ class GitHubToolCredentialTests(unittest.TestCase):
         self.assertTrue(rollback.ok)
         self.assertIn("auth_handle", result.rollback_token or {})
         self.assertNotIn("ghp_secret", repr(result.rollback_token))
-        self.assertIn("ghp_secret", client.accepted_tokens)
+        self.assertEqual(client.accepted_token_count, 2)
+        self.assertNotIn("ghp_secret", repr(client))
 
     def test_wrong_scope_handle_rollback_fails_cleanly(self) -> None:
         client = InMemoryGitHubClient()

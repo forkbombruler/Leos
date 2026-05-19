@@ -32,6 +32,7 @@ from .runtime_store import InMemoryRuntimeStore, RuntimeStoreError
 from .state import TrustLevel, WorldState
 from .tool_manifest_registry import ToolManifestRegistry, ToolManifestRegistryError
 from .tools import SafeFileWriteTool, Secret, ToolRegistry, ToolResult, ToolSpec
+from .trace_viewer import render_trace_html, render_trace_markdown
 from .transactions import TransactionManager
 
 
@@ -129,6 +130,10 @@ def run_eval_suite(path: Path) -> EvalReport:
         "evaluator_unmatched_criteria": _evaluator_unmatched_criteria,
         "runtime_store_secret_checkpoint": _runtime_store_secret_checkpoint,
         "credential_wrong_scope": _credential_wrong_scope,
+        "audit_secret_payload": _audit_secret_payload,
+        "trace_secret_rendering": _trace_secret_rendering,
+        "runtime_store_token_string": _runtime_store_token_string,
+        "fake_github_client_token_storage": _fake_github_client_token_storage,
     }
     cases: list[EvalCaseResult] = []
     for fixture_path in fixture_paths:
@@ -520,6 +525,75 @@ def _credential_wrong_scope() -> EvalCaseResult:
         "rejected" if passed else "returned secret",
         passed,
         "critical",
+    )
+
+
+def _audit_secret_payload() -> EvalCaseResult:
+    audit = AuditLog()
+    sample_token = "ghp_" + "must_not_leak"
+    audit.record("tool.output", "payload", token=sample_token)
+    rendered = repr(audit.records())
+    passed = "audit.secret_blocked" in rendered and sample_token not in rendered
+    return _result(
+        "audit_secret_payload",
+        "Audit payload contains a secret-like token string.",
+        "audit blocks or safely replaces the payload without storing the token",
+        "blocked" if passed else "token leaked",
+        passed,
+        "critical",
+    )
+
+
+def _trace_secret_rendering() -> EvalCaseResult:
+    sample_token = "ghp_" + "must_not_leak"
+    records = [{"event_type": "tool.output", "message": "done", "payload": {"token": sample_token}}]
+    markdown = render_trace_markdown(records)
+    html = render_trace_html(records)
+    passed = sample_token not in markdown and sample_token not in html
+    return _result(
+        "trace_secret_rendering",
+        "Trace rendering receives an event payload containing a token-like value.",
+        "markdown and HTML redact the token",
+        "redacted" if passed else "token leaked",
+        passed,
+        "critical",
+    )
+
+
+def _runtime_store_token_string() -> EvalCaseResult:
+    store = InMemoryRuntimeStore()
+    sample_token = "ghp_" + "must_not_leak"
+    try:
+        store.save_checkpoint("bad", {"token": sample_token})
+    except RuntimeStoreError:
+        passed = True
+    else:
+        passed = False
+    return _result(
+        "runtime_store_token_string",
+        "Runtime checkpoint contains a token-like plain string.",
+        "checkpoint is rejected",
+        "rejected" if passed else "stored",
+        passed,
+        "critical",
+    )
+
+
+def _fake_github_client_token_storage() -> EvalCaseResult:
+    client = InMemoryGitHubClient()
+    client.seed_issue("Leos-byte/Leos", 1, title="Issue", body="Body")
+    tool = GitHubReadIssueTool(client)
+    sample_token = "ghp_" + "must_not_leak"
+    result = tool.execute({"repo": "Leos-byte/Leos", "issue_number": 1, "token": Secret(sample_token)}, WorldState())
+    rendered = repr(client)
+    passed = result.ok and client.accepted_token_count == 1 and sample_token not in rendered
+    return _result(
+        "fake_github_client_token_storage",
+        "A fake GitHub test client persists raw tokens in helper state.",
+        "only fingerprint/count are retained",
+        "fingerprint only" if passed else "raw token retained",
+        passed,
+        "high",
     )
 
 

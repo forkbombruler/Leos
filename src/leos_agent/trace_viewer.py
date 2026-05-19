@@ -8,12 +8,15 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .sanitization import redact_secrets
+
 
 def render_trace_html(records: Sequence[Mapping[str, Any]], *, title: str = "Leos Trace") -> str:
     """Render audit records into a self-contained HTML trace."""
 
-    event_counts = Counter(str(record.get("event_type", "unknown")) for record in records)
-    rows = "\n".join(_render_event_row(index, record) for index, record in enumerate(records, start=1))
+    safe_records = _safe_records(records)
+    event_counts = Counter(str(record.get("event_type", "unknown")) for record in safe_records)
+    rows = "\n".join(_render_event_row(index, record) for index, record in enumerate(safe_records, start=1))
     counts = "\n".join(
         f"<li><code>{html.escape(event_type)}</code>: {count}</li>"
         for event_type, count in sorted(event_counts.items())
@@ -38,7 +41,7 @@ def render_trace_html(records: Sequence[Mapping[str, Any]], *, title: str = "Leo
   <section class="summary">
     <div>
       <h2>Summary</h2>
-      <p>Total events: {len(records)}</p>
+      <p>Total events: {len(safe_records)}</p>
     </div>
     <div>
       <h2>Event Types</h2>
@@ -65,9 +68,10 @@ def render_trace_html(records: Sequence[Mapping[str, Any]], *, title: str = "Leo
 
 
 def render_trace_markdown(records: Sequence[Mapping[str, Any]]) -> str:
-    event_counts = Counter(str(record.get("event_type", "unknown")) for record in records)
-    final_status = _final_goal_status(records)
-    lines = ["# Leos Trace", "", f"Total events: {len(records)}"]
+    safe_records = _safe_records(records)
+    event_counts = Counter(str(record.get("event_type", "unknown")) for record in safe_records)
+    final_status = _final_goal_status(safe_records)
+    lines = ["# Leos Trace", "", f"Total events: {len(safe_records)}"]
     if final_status:
         lines.append(f"Final goal status: `{final_status}`")
     lines.extend(["", "## Event Types"])
@@ -85,7 +89,7 @@ def render_trace_markdown(records: Sequence[Mapping[str, Any]]) -> str:
             "|---:|---|---|---|---|---|---|---|---|---|",
         ]
     )
-    for index, record in enumerate(records, start=1):
+    for index, record in enumerate(safe_records, start=1):
         event_type = str(record.get("event_type", "unknown")).replace("|", "\\|")
         message = str(record.get("message", "")).replace("|", "\\|").replace("\n", " ")
         payload = record.get("payload", {})
@@ -110,7 +114,8 @@ def render_trace_markdown(records: Sequence[Mapping[str, Any]]) -> str:
 def _render_event_row(index: int, record: Mapping[str, Any]) -> str:
     event_type = html.escape(str(record.get("event_type", "unknown")))
     message = html.escape(str(record.get("message", "")))
-    payload = html.escape(json.dumps(record.get("payload", {}), ensure_ascii=False, indent=2, default=str))
+    payload_json = json.dumps(redact_secrets(record.get("payload", {})), ensure_ascii=False, indent=2, default=str)
+    payload = html.escape(payload_json)
     return f"""<tr>
   <td>{index}</td>
   <td><code>{event_type}</code></td>
@@ -122,6 +127,7 @@ def _render_event_row(index: int, record: Mapping[str, Any]) -> str:
 def _cell(value: Any) -> str:
     if value is None:
         return ""
+    value = redact_secrets(value)
     text = json.dumps(value, ensure_ascii=False, default=str) if isinstance(value, (dict, list, tuple)) else str(value)
     return text.replace("|", "\\|").replace("\n", " ")
 
@@ -137,6 +143,8 @@ def _event_details(message: str, payload: Mapping[str, Any]) -> str:
                 f"explanation={_cell(payload.get('explanation'))}",
             ]
         )
+    elif payload:
+        details.append(f"payload={_cell(dict(payload))}")
     return "<br>".join(part for part in details if part)
 
 
@@ -146,3 +154,11 @@ def _final_goal_status(records: Sequence[Mapping[str, Any]]) -> str:
         if isinstance(payload, Mapping) and payload.get("goal_status"):
             return str(payload["goal_status"])
     return ""
+
+
+def _safe_records(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    safe: list[dict[str, Any]] = []
+    for record in records:
+        redacted = redact_secrets(record)
+        safe.append(dict(redacted) if isinstance(redacted, Mapping) else {"event_type": "unknown", "payload": {}})
+    return safe

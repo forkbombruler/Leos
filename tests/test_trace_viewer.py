@@ -6,6 +6,7 @@ from pathlib import Path
 
 from leos_agent.audit import AuditLog
 from leos_agent.cli import _trace_html
+from leos_agent.credentials import SecretHandle
 from leos_agent.trace_viewer import render_trace_html, render_trace_markdown
 
 
@@ -111,6 +112,33 @@ class TraceViewerTests(unittest.TestCase):
 
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
         self.assertNotIn("<script>alert(1)</script>", rendered)
+
+    def test_markdown_redacts_token_like_payloads(self) -> None:
+        rendered = render_trace_markdown(
+            [{"event_type": "tool.output", "message": "done", "payload": {"token": "ghp_must_not_leak"}}]
+        )
+
+        self.assertIn("[REDACTED]", rendered)
+        self.assertNotIn("ghp_must_not_leak", rendered)
+
+    def test_html_redacts_token_like_payloads(self) -> None:
+        rendered = render_trace_html(
+            [{"event_type": "tool.output", "message": "done", "payload": {"token": "ghp_must_not_leak"}}]
+        )
+
+        self.assertIn("[REDACTED]", rendered)
+        self.assertNotIn("ghp_must_not_leak", rendered)
+
+    def test_secret_handle_renders_without_secret(self) -> None:
+        handle = SecretHandle(handle_id="h1", scope="github:o/r", created_at=1.0)
+
+        rendered = render_trace_markdown(
+            [{"event_type": "tool.rollback", "message": "handle", "payload": {"auth_handle": handle}}]
+        )
+
+        self.assertIn("h1", rendered)
+        self.assertIn("github:o/r", rendered)
+        self.assertNotIn("must-not-leak", rendered)
 
 
 if __name__ == "__main__":

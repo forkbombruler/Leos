@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import VerificationFailed
+from .sanitization import SanitizationError, SanitizationMode, sanitize_for_boundary
 from .tools import ToolResult
 
 
@@ -39,6 +40,21 @@ class AuditLog:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def record(self, event_type: str, message: str, **payload: Any) -> AuditEvent:
+        original_event_type = event_type
+        try:
+            safe_message = sanitize_for_boundary(message, mode=SanitizationMode.REJECT, path="$.message")
+            safe_payload = sanitize_for_boundary(payload, mode=SanitizationMode.REJECT, path="$.payload")
+        except SanitizationError as exc:
+            event_type = "audit.secret_blocked"
+            safe_message = "Audit payload contained secret-like value and was blocked"
+            safe_payload = {
+                "original_event_type": original_event_type,
+                "error_type": type(exc).__name__,
+                "reason": str(exc),
+            }
+        return self._append_event(str(event_type), str(safe_message), dict(safe_payload))
+
+    def _append_event(self, event_type: str, message: str, payload: dict[str, Any]) -> AuditEvent:
         previous_hash = self.events[-1].event_hash if self.events else self.GENESIS_HASH
         event = AuditEvent(
             event_type=event_type,

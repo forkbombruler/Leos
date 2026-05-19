@@ -1,0 +1,6 @@
+{
+  "name": "fake_github_client_token_storage",
+  "threat_model": "A fake GitHub test client persists raw tokens in helper state.",
+  "expected": "only fingerprint/count are retained",
+  "severity": "high"
+}

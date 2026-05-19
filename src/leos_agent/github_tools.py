@@ -69,11 +69,13 @@ class InMemoryGitHubClient:
     pr_idempotency: dict[tuple[str, str], int] = field(default_factory=dict)
     next_pr: int = 1
     next_comment: int = 1
-    accepted_tokens: list[str] = field(default_factory=list)
+    accepted_token_count: int = 0
+    accepted_token_fingerprints: list[str] = field(default_factory=list)
 
     def _record_token(self, token: str | None) -> None:
         if token is not None:
-            self.accepted_tokens.append(token)
+            self.accepted_token_count += 1
+            self.accepted_token_fingerprints.append(_token_fingerprint(token))
 
     def seed_issue(self, repo: str, issue_number: int, *, title: str, body: str) -> None:
         self.issues[(repo, issue_number)] = {"repo": repo, "number": issue_number, "title": title, "body": body}
@@ -187,6 +189,10 @@ class InMemoryGitHubClient:
 
 def _sha(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _token_fingerprint(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
 
 
 def _token(arguments: Mapping[str, Any]) -> str | None:

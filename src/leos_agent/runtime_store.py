@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .enums import GoalStatus
-from .errors import LeosError, SecretBoundaryViolation
+from .errors import LeosError
 from .goals import Goal
 from .plans import TransactionPlan
+from .sanitization import SanitizationError, assert_no_secrets
 from .serialization import SerializationError, deserialize_plan, serialize_plan
-from .tools import Secret
 
 
 class RuntimeStoreError(LeosError):
@@ -59,7 +59,7 @@ class InMemoryRuntimeStore:
         return self.plans.get(plan_id)
 
     def append_runtime_event(self, event: Mapping[str, Any]) -> None:
-        _reject_secret_values(event)
+        _assert_store_safe(event)
         self.events.append(dict(event))
 
     def list_runtime_events(self, goal_id: str | None = None) -> list[dict[str, Any]]:
@@ -68,7 +68,7 @@ class InMemoryRuntimeStore:
         return [dict(event) for event in self.events if event.get("goal_id") == goal_id]
 
     def save_checkpoint(self, key: str, value: Mapping[str, Any]) -> None:
-        _reject_secret_values(value)
+        _assert_store_safe(value)
         self.checkpoints[key] = dict(value)
 
     def load_checkpoint(self, key: str) -> dict[str, Any] | None:
@@ -95,29 +95,32 @@ class JsonlRuntimeStore:
         self._append_jsonl(self.goals_path, _goal_to_dict(goal))
 
     def load_goal(self, goal_id: str) -> Goal | None:
+        found: Goal | None = None
         for record in self._read_jsonl(self.goals_path):
             if record.get("goal_id") == goal_id:
-                return _goal_from_dict(record)
-        return None
+                found = _goal_from_dict(record)
+        return found
 
     def save_plan(self, plan: TransactionPlan) -> None:
         try:
             payload = json.loads(serialize_plan(plan))
         except (SerializationError, TypeError, ValueError) as exc:
             raise RuntimeStoreError(f"Could not serialize plan: {type(exc).__name__}") from exc
+        _assert_store_safe(payload)
         self._append_jsonl(self.plans_path, payload)
 
     def load_plan(self, plan_id: str) -> TransactionPlan | None:
+        found: TransactionPlan | None = None
         for record in self._read_jsonl(self.plans_path):
             if record.get("plan_id") == plan_id:
                 try:
-                    return deserialize_plan(json.dumps(record))
+                    found = deserialize_plan(json.dumps(record))
                 except Exception as exc:
                     raise RuntimeStoreError(f"Could not deserialize plan: {type(exc).__name__}") from exc
-        return None
+        return found
 
     def append_runtime_event(self, event: Mapping[str, Any]) -> None:
-        _reject_secret_values(event)
+        _assert_store_safe(event)
         self._append_jsonl(self.events_path, dict(event))
 
     def list_runtime_events(self, goal_id: str | None = None) -> list[dict[str, Any]]:
@@ -127,22 +130,28 @@ class JsonlRuntimeStore:
         return [event for event in events if event.get("goal_id") == goal_id]
 
     def save_checkpoint(self, key: str, value: Mapping[str, Any]) -> None:
-        _reject_secret_values(value)
+        _assert_store_safe(value)
         checkpoints = self._read_checkpoints()
         checkpoints[key] = dict(value)
-        self.checkpoints_path.write_text(json.dumps(checkpoints, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_path = self.checkpoints_path.with_suffix(self.checkpoints_path.suffix + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(checkpoints, ensure_ascii=False, indent=2))
+            handle.flush()
+        tmp_path.replace(self.checkpoints_path)
 
     def load_checkpoint(self, key: str) -> dict[str, Any] | None:
         value = self._read_checkpoints().get(key)
         return dict(value) if isinstance(value, dict) else None
 
     def _append_jsonl(self, path: Path, record: Mapping[str, Any]) -> None:
+        _assert_store_safe(record)
         try:
             encoded = json.dumps(record, ensure_ascii=False)
         except TypeError as exc:
             raise RuntimeStoreError(f"{path.name}: record is not JSON serializable") from exc
         with path.open("a", encoding="utf-8") as handle:
             handle.write(encoded + "\n")
+            handle.flush()
 
     def _read_jsonl(self, path: Path) -> list[dict[str, Any]]:
         if not path.exists():
@@ -200,16 +209,8 @@ def _goal_from_dict(data: Mapping[str, Any]) -> Goal:
     )
 
 
-def _reject_secret_values(value: Any) -> None:
-    if isinstance(value, Secret):
-        raise RuntimeStoreError("Secret values cannot be stored in RuntimeStore")
-    if isinstance(value, Mapping):
-        for item in value.values():
-            _reject_secret_values(item)
-        return
-    if isinstance(value, (list, tuple, set)):
-        for item in value:
-            _reject_secret_values(item)
-        return
-    if isinstance(value, str) and value == "<secret>":
-        raise SecretBoundaryViolation("Redacted secret marker cannot be stored in RuntimeStore")
+def _assert_store_safe(value: Any) -> None:
+    try:
+        assert_no_secrets(value)
+    except SanitizationError as exc:
+        raise RuntimeStoreError(f"RuntimeStore rejected secret-like value: {exc}") from exc

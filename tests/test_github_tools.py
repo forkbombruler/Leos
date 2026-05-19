@@ -139,6 +139,9 @@ class GitHubToolsTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.observed_state_delta["github_issue"]["title"], "Issue")
+        self.assertEqual(client.accepted_token_count, 1)
+        self.assertEqual(len(client.accepted_token_fingerprints), 1)
+        self.assertNotIn("ghp_secret", repr(client))
 
     def test_plain_string_token_not_in_audit(self) -> None:
         client = InMemoryGitHubClient()
@@ -215,6 +218,19 @@ class GitHubToolsTests(unittest.TestCase):
             first.observed_state_delta["github_pr"]["number"], second.observed_state_delta["github_pr"]["number"]
         )
         self.assertEqual(len(client.prs), 1)
+
+    def test_in_memory_client_does_not_store_raw_token(self) -> None:
+        client = InMemoryGitHubClient()
+        client.seed_issue("o/r", 1, title="Issue", body="Body")
+
+        result = GitHubReadIssueTool(client).execute(
+            {"repo": "o/r", "issue_number": 1, "token": Secret("ghp_secret")}, WorldState()
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(client.accepted_token_count, 1)
+        self.assertNotIn("ghp_secret", repr(client))
+        self.assertNotIn("ghp_secret", repr(client.accepted_token_fingerprints))
 
     def test_read_issue_tool_uses_rest_client(self) -> None:
         transport = FakeTransport(

@@ -19,9 +19,11 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - GitHub API data and writes cross an external-service boundary.
 - GitHub REST responses are external observations; tokens are scoped `Secret`
   inputs and must not appear in audit, trace, stdout, or exceptions.
+- Audit, trace, runtime-store, and fake-client state are persistence or
+  presentation boundaries and must sanitize secret-like values.
 - Tool manifests are capability declarations, not approval grants.
 - RuntimeStore data crosses a persistence boundary and must reject `Secret`
-  values in events and checkpoints.
+  values and token-like strings in events and checkpoints.
 - CredentialVault handles are references to secrets, not secret values.
 - Human approval is a separate gate and cannot be declared by a model or policy file.
 
@@ -39,6 +41,12 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - Duplicate external actions: retries create duplicate PRs, messages, or writes.
 - GitHub overwrite/confused-deputy risk: a file update targets stale content or
   a cleanup path deletes a protected branch.
+- Audit payload secret leak: a tool or model-sourced payload includes a token
+  that would otherwise be persisted in JSONL.
+- Trace rendering secret leak: an audit payload contains a token-like string
+  that would otherwise appear in HTML or Markdown reports.
+- Test fake-client token persistence: a fake integration client stores raw
+  credentials in helper state and later leaks them through `repr` or failure logs.
 
 ## Mitigations Already Implemented
 - `PolicyEngine`, `ApprovalGate`, and `TransactionManager` gate all transaction execution.
@@ -60,9 +68,16 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - Goal evaluation is registry-backed; unmatched criteria are not treated as
   satisfied.
 - RuntimeStore rejects `Secret` values in persisted runtime events and
-  checkpoints.
+  checkpoints, including redaction markers embedded in strings and common
+  token-like literals.
 - CredentialVault rejects wrong-scope, revoked, expired, and missing
   `SecretHandle` values.
+- A shared sanitizer protects audit, runtime store, trace rendering, and proof
+  helper boundaries. Audit payloads containing secret-like values are replaced
+  with `audit.secret_blocked` events.
+- Trace rendering redacts token-like values before Markdown/HTML output.
+- `InMemoryGitHubClient` stores only token fingerprints and counts, not raw
+  token strings.
 
 ## Mitigations Still Missing
 - Production-grade container or microVM isolation with integration tests against a real runtime.
@@ -88,7 +103,9 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
   network transport is called.
 - GitHub file writes must provide `expected_sha` or `expected_previous`.
 - GitHub PR creation should use idempotency keys for retry safety.
-- RuntimeStore checkpoints and events must reject `Secret` values.
+- RuntimeStore checkpoints and events must reject `Secret` values and token-like strings.
+- Audit and trace output must not contain raw token-like values.
+- Fake clients must not persist raw credentials.
 - Credential handles must match scope and must fail after revoke or expiry.
 - Rollback failures must be visible in audit records.
 - External observations cannot override system, developer, or policy constraints.

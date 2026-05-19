@@ -100,6 +100,7 @@ network access or external APIs.
 | Evaluator registry | implemented |
 | Runtime store | in-memory and JSONL development store |
 | Credential vault | in-memory SecretHandle abstraction |
+| Secret sanitization | implemented for audit/store/trace/runtime boundaries |
 | GitHub software-engineering tools | in-memory dry-run-first tool layer |
 | GitHub REST client | implemented with fake-transport tests; real writes gated |
 | GitHub issue-to-PR orchestration | AgentLoop dry-run path with fake REST transport |
@@ -128,6 +129,10 @@ operations must still run through the tool layer, `PolicyEngine`,
 require `expected_sha` or `expected_previous`, PR creation supports a hidden
 Leos idempotency marker, and protected branches such as `main` and `master` are
 not deleted by cleanup logic.
+Audit, trace rendering, runtime events, and checkpoints share a sanitization
+boundary that rejects or redacts `Secret`, `SecretHandle`-unsafe payloads, and
+common token-like strings. `InMemoryGitHubClient` keeps only token fingerprints
+and counts for test evidence, never raw token strings.
 
 Run the end-to-end GitHub issue orchestration demo:
 

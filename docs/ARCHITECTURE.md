@@ -103,10 +103,17 @@ Runtime progress can optionally be persisted with `RuntimeStore`.
 `InMemoryRuntimeStore` is for tests and demos; `JsonlRuntimeStore` is a
 development store for goals, plans, runtime events, and checkpoints. It is not a
 production database or strong-concurrency storage layer.
+Runtime store writes pass through the shared sanitization boundary. Events and
+checkpoints reject `Secret` values, redaction markers embedded in strings, and
+common token-like literals before persistence.
 
 Rollback credentials can be represented as `SecretHandle` values from a
 `CredentialVault`. The in-memory vault is a local development abstraction; a
 production deployment should use KMS, an OS keychain, or a cloud secret manager.
+`SecretHandle` values are serializable references only and do not expose the
+underlying secret. Audit logs and trace rendering use the same sanitizer:
+secret-like audit payloads are replaced with `audit.secret_blocked`, and trace
+HTML/Markdown redacts token-like values before rendering.
 
 ### 6. Memory and learning
 

@@ -171,6 +171,14 @@ from .sandbox import (  # noqa: F401
     SandboxUnavailable,
     WorkspaceSubprocessSandboxRunner,
 )
+from .sanitization import (
+    SanitizationError,
+    SanitizationMode,
+    assert_no_secrets,
+    redact_secrets,
+    safe_json_dumps,
+    sanitize_for_boundary,
+)
 from .simulation import (
     FakeBrowser,
     FakeCalendar,
@@ -335,6 +343,8 @@ __all__ = [
     "SafeFileWriteTool",
     "SandboxCommand",
     "SandboxCommandTool",
+    "SanitizationError",
+    "SanitizationMode",
     "SchemaValidationFailed",
     "Secret",
     "SecretHandle",
@@ -371,6 +381,7 @@ __all__ = [
     "WorkspaceEscapeBlocked",
     "WorldState",
     "Watchdog",
+    "assert_no_secrets",
     "default_dev_registry",
     "default_registry",
     "default_dev_registry",
@@ -387,7 +398,10 @@ __all__ = [
     "render_trace_markdown",
     "run_safety_evals",
     "run_eval_suite",
+    "redact_secrets",
+    "safe_json_dumps",
     "safe_file_write_causal_contract",
+    "sanitize_for_boundary",
     "sign_policy",
     "safe_file_write_causal_contract",
     "validate_policy_config",
