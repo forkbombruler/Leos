@@ -117,7 +117,15 @@ from .model import (  # noqa: F401
     StructuredOutputError,
 )
 from .model_adapters import AnthropicModelClient, LocalHTTPModelClient, OpenAIModelClient
-from .network_tools import BrowserReadTool, NetworkFetcher, NetworkFetchResponse, NetworkFetchTool, URLSafetyPolicy
+from .network_tools import (
+    BrowserReadTool,
+    DNSResolver,
+    NetworkFetcher,
+    NetworkFetchResponse,
+    NetworkFetchTool,
+    URLSafetyPolicy,
+    make_untrusted_observation,
+)
 from .planner import (  # noqa: F401
     LLMPlannerAdapter,
     Planner,
@@ -189,6 +197,7 @@ from .simulation import (
     FakeShell,
     SimulationEnvironment,
 )
+from .sqlite_store import SQLiteRuntimeStore
 from .state import TrustLevel, WorldState
 from .task_queue import (
     RetryPolicy,
@@ -253,6 +262,7 @@ __all__ = [
     "DockerSandboxRunner",
     "DomainEvaluator",
     "DeterministicProposalProvider",
+    "DNSResolver",
     "EchoTool",
     "EffectPrediction",
     "EvalReport",
@@ -294,6 +304,7 @@ __all__ = [
     "InMemoryRuntimeStore",
     "InvalidGoalTransition",
     "JsonlRuntimeStore",
+    "SQLiteRuntimeStore",
     "LeosError",
     "ListFilesTool",
     "LocalHTTPModelClient",
@@ -392,6 +403,7 @@ __all__ = [
     "load_policy_from_file",
     "load_tool_manifest_file",
     "manifest_to_json",
+    "make_untrusted_observation",
     "replay_audit_log",
     "render_eval_report_markdown",
     "render_trace_html",

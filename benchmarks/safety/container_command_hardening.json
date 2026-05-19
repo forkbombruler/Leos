@@ -1,0 +1,6 @@
+{
+  "name": "container_command_hardening",
+  "threat_model": "Container command misses hardening flags or enables privileged mode.",
+  "expected": "docker argv includes hardening flags and no privileged mode",
+  "severity": "high"
+}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .audit import AuditLog
@@ -33,6 +33,7 @@ from .errors import (
 from .goals import GoalProgress, ResourceBudget
 from .plans import ActionStep, StateCondition, TransactionPlan
 from .policy import ApprovalGate, PolicyEngine
+from .sandbox import SandboxRunner
 from .state import TrustLevel, WorldState
 from .tools import (
     Secret,
@@ -60,6 +61,7 @@ class TransactionManager:
         approval_gate: ApprovalGate | None = None,
         counterfactual_review: CounterfactualReview | None = None,
         allow_network_tools: bool = False,
+        sandbox_runners: Mapping[SandboxPolicy, SandboxRunner] | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy
@@ -68,6 +70,7 @@ class TransactionManager:
         self.approval_gate = approval_gate or ApprovalGate()
         self.counterfactual_review = counterfactual_review or CounterfactualReview(causal_model, audit_log)
         self.allow_network_tools = allow_network_tools
+        self.sandbox_runners = dict(sandbox_runners or {})
 
     def execute_plan(self, plan: TransactionPlan, state: WorldState) -> TransactionPlan:
         self.audit_log.record(
@@ -90,7 +93,7 @@ class TransactionManager:
             tool = self.registry.get(step.tool_name)
             self._hydrate_step_metadata(step, tool)
 
-            sandbox_issue = self._enforce_sandbox(tool, allow_network_tools=self.allow_network_tools)
+            sandbox_issue = self._enforce_sandbox(tool)
             if sandbox_issue:
                 step.status = StepStatus.BLOCKED
                 error: LeosError = SandboxViolation(sandbox_issue)
@@ -356,16 +359,24 @@ class TransactionManager:
             return GoalStatus.FAILED
         return GoalStatus.FAILED
 
-    @staticmethod
-    def _enforce_sandbox(tool: Tool, *, allow_network_tools: bool = False) -> str | None:
-        policy = tool.spec.sandbox_policy
-        if policy is SandboxPolicy.CONTAINER:
+    def _enforce_sandbox(self, tool: Tool | None = None) -> str | None:
+        target_tool: Any
+        if tool is None:
+            target_tool = self  # backward-compatible class-style call: TransactionManager._enforce_sandbox(tool)
+            sandbox_runners: Mapping[SandboxPolicy, SandboxRunner] = {}
+            allow_network_tools = False
+        else:
+            target_tool = tool
+            sandbox_runners = self.sandbox_runners
+            allow_network_tools = self.allow_network_tools
+        policy = target_tool.spec.sandbox_policy
+        if policy is SandboxPolicy.CONTAINER and policy not in sandbox_runners:
             return "container sandbox not available — requires external container runtime"
-        if policy is SandboxPolicy.MICROVM:
+        if policy is SandboxPolicy.MICROVM and policy not in sandbox_runners:
             return "microvm sandbox not available — requires external microvm runtime"
-        if tool.spec.network_access and not allow_network_tools:
+        if target_tool.spec.network_access and not allow_network_tools:
             return "network access not allowed in default sandbox"
-        if policy is SandboxPolicy.WORKSPACE and tool.spec.filesystem_scope == "none":
+        if policy is SandboxPolicy.WORKSPACE and target_tool.spec.filesystem_scope == "none":
             return "workspace sandbox requires filesystem_scope"
         return None
 

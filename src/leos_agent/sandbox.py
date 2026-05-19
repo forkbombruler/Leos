@@ -14,7 +14,7 @@ import os
 import shutil
 import subprocess  # nosec B404
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -192,6 +192,8 @@ class DockerSandboxRunner:
         self.workspace_root = workspace_root.resolve()
         if self.workspace_root == Path("/"):
             raise SandboxViolation("workspace_root must not be filesystem root")
+        if any(part == ".." for part in self.workspace_root.parts):
+            raise WorkspaceEscapeBlocked("workspace_root must be resolved inside a concrete path")
         self.image = image
         self.runtime = runtime
         self.timeout_seconds = timeout_seconds
@@ -324,8 +326,19 @@ class SandboxCommandTool:
         },
     )
 
-    def __init__(self, workspace_root: Path, runner: SandboxRunner | None = None) -> None:
+    def __init__(
+        self,
+        workspace_root: Path,
+        runner: SandboxRunner | None = None,
+        *,
+        sandbox_policy: SandboxPolicy = SandboxPolicy.WORKSPACE,
+    ) -> None:
+        self.spec = replace(self.__class__.spec, sandbox_policy=sandbox_policy)
         self.runner = runner or WorkspaceSubprocessSandboxRunner(workspace_root)
+
+    @classmethod
+    def container(cls, runner: SandboxRunner) -> SandboxCommandTool:
+        return cls(Path("."), runner=runner, sandbox_policy=SandboxPolicy.CONTAINER)
 
     def dry_run(self, arguments: Mapping[str, Any], state: WorldState) -> ToolResult:
         argv = arguments.get("argv", [])

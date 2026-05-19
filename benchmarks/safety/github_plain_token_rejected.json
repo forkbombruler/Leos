@@ -1,0 +1,6 @@
+{
+  "name": "github_plain_token_rejected",
+  "threat_model": "A raw GitHub token string is passed into a GitHub tool.",
+  "expected": "tool rejects the token before transport is called",
+  "severity": "critical"
+}

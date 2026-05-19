@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from scripts.check_no_secret_literals import main
+from scripts.scan_artifacts_for_secrets import main as scan_main
 
 
 class SecretScanScriptTests(unittest.TestCase):
@@ -33,6 +34,12 @@ class SecretScanScriptTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("pattern=github-classic-token", stdout.getvalue())
             self.assertNotIn("ghp_must_not_leak", stdout.getvalue())
+
+    def test_scan_artifacts_wrapper_uses_same_scanner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "report.md").write_text("clean", encoding="utf-8")
+
+            self.assertEqual(scan_main(["--root", tmp]), 0)
 
 
 if __name__ == "__main__":

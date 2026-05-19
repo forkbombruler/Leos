@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 from .audit import AuditLog
@@ -24,6 +24,15 @@ from .policy import PolicyEngine
 from .prompts import DEFAULT_PROMPT_REGISTRY, PromptRegistry
 from .state import WorldState
 from .tools import ToolRegistry
+
+_DANGEROUS_UNTRUSTED_TOKENS = (
+    "policy_override",
+    "grant_permission",
+    "tool_permission_grant",
+    "reveal_secret",
+    "credential_request",
+    "system_instruction",
+)
 
 
 class Planner:
@@ -153,6 +162,7 @@ def validate_llm_proposals(proposals_data: list[dict[str, Any]], available_tools
         steps_data = raw["steps"]
         if not steps_data:
             raise LLMOutputValidationError(f"Proposal [{i}] steps must not be empty")
+        _reject_untrusted_control_intent(raw, proposal_index=i)
         steps: list[ActionStep] = []
         for j, s in enumerate(steps_data):
             if not isinstance(s, dict):
@@ -184,6 +194,17 @@ def validate_llm_proposals(proposals_data: list[dict[str, Any]], available_tools
             )
         )
     return validated
+
+
+def _reject_untrusted_control_intent(raw: Mapping[str, Any], *, proposal_index: int) -> None:
+    from .errors import LLMOutputValidationError
+
+    rendered = json.dumps(raw, sort_keys=True, default=str).lower()
+    for token in _DANGEROUS_UNTRUSTED_TOKENS:
+        if token in rendered:
+            raise LLMOutputValidationError(
+                f"Proposal [{proposal_index}] contains forbidden untrusted-control intent: {token}"
+            )
 
 
 class StructuredLLMPlanner:

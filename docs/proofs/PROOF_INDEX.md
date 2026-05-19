@@ -1,15 +1,17 @@
 # Proof Index
 
-- Proof status: `release_grade`
-- Release grade: `True`
-- Generated at: `2026-05-17T09:09:27.458656+00:00`
-- Commit SHA: `e6103392b43a5076ab4fc7d4d45bcbbcd4eb0318`
-- Branch: `main`
-- Dirty worktree: `False`
+- Proof status: `precommit_dirty`
+- Release grade: `False`
+- Generated at: `2026-05-19T09:47:27.783952+00:00`
+- Commit SHA: `54822eef2d3bfd179670fcbc080c02c20a880749`
+- Branch: `fix/secret-hygiene-runtime-boundaries`
+- Dirty worktree: `True`
 - Summary: {'total': 12, 'passed': 12, 'failed': 0, 'skipped': 0}
 
 ## Warnings
-- none
+- WARNING: This proof was generated from a dirty worktree and is not release-grade evidence.
+
+**WARNING: This proof was generated from a dirty worktree. It is useful for local review but not release-grade evidence.**
 
 ## Documents
 - [SOURCE_SNAPSHOT.md](SOURCE_SNAPSHOT.md)

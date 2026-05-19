@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import ipaddress
+import socket
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
@@ -25,6 +26,23 @@ class NetworkFetchResponse:
 
 
 NetworkFetcher = Callable[[str, float, int], NetworkFetchResponse]
+DNSResolver = Callable[[str, int | None], Sequence[tuple[Any, ...]]]
+
+
+def make_untrusted_observation(**payload: Any) -> dict[str, Any]:
+    """Wrap external data with explicit trust and use boundaries."""
+
+    return {
+        **payload,
+        "trust_level": TrustLevel.UNTRUSTED_EXTERNAL.value,
+        "allowed_uses": ["summarization", "evidence"],
+        "forbidden_uses": [
+            "policy_override",
+            "credential_request",
+            "system_instruction",
+            "tool_permission_grant",
+        ],
+    }
 
 
 @dataclass(frozen=True)
@@ -35,6 +53,7 @@ class URLSafetyPolicy:
     denied_domains: tuple[str, ...] = ()
     resolve_dns: bool = False
     max_redirects: int = 0
+    resolver: DNSResolver = socket.getaddrinfo
 
     def validate(self, url: str) -> ToolResult:
         parsed = urlparse(url)
@@ -56,17 +75,25 @@ class URLSafetyPolicy:
         try:
             ip = ipaddress.ip_address(host)
         except ValueError:
+            if self.resolve_dns:
+                return self._validate_dns(host, parsed.port)
             return ToolResult(True, "URL passed safety policy")
-        if (
-            ip.is_loopback
-            or ip.is_private
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-            or str(ip) == "169.254.169.254"
-        ):
+        if _blocked_ip(ip):
             return ToolResult(False, "Local, private, link-local, metadata, and reserved IPs are blocked")
+        return ToolResult(True, "URL passed safety policy")
+
+    def _validate_dns(self, host: str, port: int | None) -> ToolResult:
+        try:
+            infos = self.resolver(host, port)
+        except Exception as exc:  # noqa: BLE001 - DNS safety failure must fail closed
+            return ToolResult(False, f"DNS resolution failed closed: {type(exc).__name__}")
+        for info in infos:
+            try:
+                ip = ipaddress.ip_address(info[4][0])
+            except (IndexError, TypeError, ValueError):
+                return ToolResult(False, "DNS resolver returned an invalid address")
+            if _blocked_ip(ip):
+                return ToolResult(False, "DNS resolved to a local, private, metadata, or reserved IP")
         return ToolResult(True, "URL passed safety policy")
 
 
@@ -151,15 +178,12 @@ class NetworkFetchTool:
         except Exception as exc:  # noqa: BLE001 - tools return structured failures
             return ToolResult(False, f"Network fetch failed: {exc}", error=LeosError(str(exc)))
 
-        observation = {
-            "url": url,
-            "status_code": int(response.status_code),
-            "content": response.content,
-            "content_type": response.content_type,
-            "trust_level": TrustLevel.UNTRUSTED_EXTERNAL.value,
-            "allowed_uses": ["summarization", "evidence"],
-            "forbidden_uses": ["policy_override", "credential_request", "system_instruction"],
-        }
+        observation = make_untrusted_observation(
+            url=url,
+            status_code=int(response.status_code),
+            content=response.content,
+            content_type=response.content_type,
+        )
         return ToolResult(
             True,
             f"Fetched {url}",
@@ -224,16 +248,13 @@ class BrowserReadTool:
             return raw
         network_observation = raw.data["observation"]
         parsed = _parse_html(network_observation["content"])
-        observation = {
-            "url": network_observation["url"],
-            "status_code": network_observation["status_code"],
-            "title": parsed["title"],
-            "text": parsed["text"],
-            "links": parsed["links"],
-            "trust_level": TrustLevel.UNTRUSTED_EXTERNAL.value,
-            "allowed_uses": ["summarization", "evidence"],
-            "forbidden_uses": ["policy_override", "credential_request", "system_instruction"],
-        }
+        observation = make_untrusted_observation(
+            url=network_observation["url"],
+            status_code=network_observation["status_code"],
+            title=parsed["title"],
+            text=parsed["text"],
+            links=parsed["links"],
+        )
         return ToolResult(
             True,
             f"Read browser page {observation['url']}",
@@ -309,3 +330,15 @@ def _urllib_fetch(url: str, timeout: float, max_bytes: int) -> NetworkFetchRespo
         if isinstance(exc.reason, TimeoutError):
             raise TimeoutError(str(exc)) from exc
         raise
+
+
+def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or str(ip) == "169.254.169.254"
+    )

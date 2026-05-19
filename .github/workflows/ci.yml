@@ -37,3 +37,12 @@ jobs:
 
       - name: Bandit security scan
         run: bandit -r src
+
+      - name: Safety evals
+        run: leos eval --suite safety
+
+      - name: Generate local proof documents
+        run: python scripts/generate_proofs.py --output docs/proofs --allow-dirty
+
+      - name: Scan artifacts for secret literals
+        run: python scripts/scan_artifacts_for_secrets.py --root .

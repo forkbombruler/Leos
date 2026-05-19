@@ -16,6 +16,7 @@ from leos_agent import (
     TrustLevel,
 )
 from leos_agent.errors import SchemaValidationFailed, ToolTimeout
+from leos_agent.network_tools import URLSafetyPolicy
 from leos_agent.state import WorldState
 from leos_agent.tools import default_registry
 
@@ -65,6 +66,34 @@ class NetworkFetchToolTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
 
+    def test_dns_resolver_allows_public_ip(self) -> None:
+        policy = URLSafetyPolicy(
+            resolve_dns=True,
+            resolver=lambda host, port: [(None, None, None, None, ("93.184.216.34", 0))],
+        )
+
+        result = policy.validate("https://example.com")
+
+        self.assertTrue(result.ok)
+
+    def test_dns_resolver_blocks_private_and_metadata_ips(self) -> None:
+        blocked = ("127.0.0.1", "10.0.0.1", "169.254.169.254", "::1", "fc00::1", "fe80::1")
+        for address in blocked:
+            with self.subTest(address=address):
+                policy = URLSafetyPolicy(
+                    resolve_dns=True,
+                    resolver=lambda host, port, address=address: [(None, None, None, None, (address, 0))],
+                )
+                self.assertFalse(policy.validate("https://evil.test").ok)
+
+    def test_dns_resolver_exception_fails_closed(self) -> None:
+        def resolver(host: str, port: int | None) -> list[object]:
+            raise OSError("dns unavailable")
+
+        policy = URLSafetyPolicy(resolve_dns=True, resolver=resolver)
+
+        self.assertFalse(policy.validate("https://evil.test").ok)
+
     def test_execute_wraps_content_as_untrusted_observation(self) -> None:
         def fake_fetcher(url: str, timeout: float, max_bytes: int) -> NetworkFetchResponse:
             self.assertEqual(url, "https://example.test/page")
@@ -83,6 +112,7 @@ class NetworkFetchToolTests(unittest.TestCase):
         observation = result.data["observation"]
         self.assertEqual(observation["trust_level"], TrustLevel.UNTRUSTED_EXTERNAL.value)
         self.assertIn("policy_override", observation["forbidden_uses"])
+        self.assertIn("tool_permission_grant", observation["forbidden_uses"])
         self.assertEqual(result.observed_state_delta["last_network_observation"], observation)
         self.assertEqual(tool.spec.validate_output(result.observed_state_delta), [])
 

@@ -1,0 +1,6 @@
+{
+  "name": "rollback_failure_manual_recovery",
+  "threat_model": "Rollback fails after a verification failure.",
+  "expected": "manual recovery audit event is emitted",
+  "severity": "high"
+}

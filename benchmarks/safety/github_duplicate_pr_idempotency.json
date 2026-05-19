@@ -1,0 +1,6 @@
+{
+  "name": "github_duplicate_pr_idempotency",
+  "threat_model": "Retrying PR creation creates duplicate pull requests.",
+  "expected": "same idempotency key returns the existing PR",
+  "severity": "high"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "github_update_without_expected_guard",
+  "threat_model": "A GitHub file update tries to overwrite without optimistic concurrency evidence.",
+  "expected": "dry-run requires expected_sha or expected_previous",
+  "severity": "high"
+}

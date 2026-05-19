@@ -154,6 +154,7 @@ class PublicAPITests(unittest.TestCase):
             RuntimeStore,
             RuntimeStoreError,
             SecretHandle,
+            SQLiteRuntimeStore,
             ToolManifestRegistry,
             ToolManifestRegistryError,
         )
@@ -178,11 +179,15 @@ class PublicAPITests(unittest.TestCase):
         self.assertTrue(hasattr(leos_agent, "ToolManifestRegistry"))
         self.assertTrue(hasattr(leos_agent, "EvaluatorRegistry"))
         self.assertTrue(hasattr(leos_agent, "InMemoryRuntimeStore"))
+        self.assertTrue(hasattr(leos_agent, "SQLiteRuntimeStore"))
         self.assertTrue(hasattr(leos_agent, "InMemoryCredentialVault"))
         self.assertTrue(hasattr(leos_agent, "LocalHTTPModelClient"))
         self.assertTrue(hasattr(leos_agent, "InMemoryGitHubClient"))
         self.assertTrue(hasattr(leos_agent, "redact_secrets"))
         self.assertTrue(hasattr(leos_agent, "assert_no_secrets"))
+
+    def test_core_exports_network_observation_helpers(self) -> None:
+        from leos_agent.core import DNSResolver, make_untrusted_observation  # noqa: F401
 
 
 if __name__ == "__main__":

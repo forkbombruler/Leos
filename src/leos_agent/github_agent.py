@@ -26,6 +26,8 @@ class GitHubIssuePlanConfig:
     pr_title: str | None = None
     pr_body: str | None = None
     idempotency_key: str | None = None
+    check_ci: bool = False
+    ci_ref: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("repo", "path", "base_branch", "branch", "new_content"):
@@ -63,7 +65,10 @@ class GitHubIssuePlanProvider:
                 return []
             return [self._observe_proposal()]
 
-        if not self._PR_TOOLS.issubset(available):
+        required = set(self._PR_TOOLS)
+        if self.config.check_ci:
+            required.add("github_check_ci_status")
+        if not required.issubset(available):
             return []
         return [self._pr_proposal(issue, file_data)]
 
@@ -90,6 +95,18 @@ class GitHubIssuePlanProvider:
                 "Read the target file so the update can use an optimistic guard.",
             ),
         ]
+        if self.config.check_ci:
+            steps.append(
+                ActionStep(
+                    "github_check_ci_status",
+                    {
+                        "repo": self.config.repo,
+                        "ref": self.config.ci_ref or self.config.branch,
+                        **token_args,
+                    },
+                    "Check CI status for the branch after opening the PR.",
+                )
+            )
         return PlanProposal(
             steps=steps,
             rationale="Observe the GitHub issue and target file before making a consequential change.",

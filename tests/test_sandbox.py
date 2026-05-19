@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from leos_agent import ActionStep, ApprovalGate, AuditLog, CausalGraph, Goal, TransactionManager, TransactionPlan
 from leos_agent.enums import Permission, SandboxPolicy
 from leos_agent.errors import SandboxViolation, WorkspaceEscapeBlocked
 from leos_agent.policy import PolicyEngine
@@ -18,7 +19,8 @@ from leos_agent.sandbox import (
     SandboxUnavailable,
     WorkspaceSubprocessSandboxRunner,
 )
-from leos_agent.tools import default_registry
+from leos_agent.state import WorldState
+from leos_agent.tools import ToolRegistry, default_registry
 
 
 class WorkspaceSubprocessSandboxRunnerTests(unittest.TestCase):
@@ -159,6 +161,62 @@ class SandboxCommandToolTests(unittest.TestCase):
     def test_production_profile_blocks_execute_code(self) -> None:
         policy = PolicyEngine.from_profile("production")
         self.assertIn(Permission.EXECUTE_CODE, policy.require_human_for)
+
+    def test_container_policy_tool_without_runner_is_blocked(self) -> None:
+        runner = _FakeRunner()
+        tool = SandboxCommandTool.container(runner)
+        registry = ToolRegistry()
+        registry.register(tool)
+        manager = TransactionManager(
+            registry,
+            PolicyEngine(granted_permissions=(Permission.EXECUTE_CODE,)),
+            CausalGraph(),
+            AuditLog(),
+            ApprovalGate(lambda step: True),
+        )
+        plan = TransactionPlan(
+            Goal("container", ["done"]),
+            [ActionStep("sandbox_command", {"argv": ["echo", "hi"]}, "run")],
+        )
+
+        result = manager.execute_plan(plan, WorldState())
+
+        self.assertEqual(result.steps[0].status.value, "blocked")
+        self.assertFalse(runner.called)
+
+    def test_container_policy_tool_with_runner_can_execute(self) -> None:
+        runner = _FakeRunner()
+        tool = SandboxCommandTool.container(runner)
+        registry = ToolRegistry()
+        registry.register(tool)
+        manager = TransactionManager(
+            registry,
+            PolicyEngine(granted_permissions=(Permission.EXECUTE_CODE,)),
+            CausalGraph(),
+            AuditLog(),
+            ApprovalGate(lambda step: True),
+            sandbox_runners={SandboxPolicy.CONTAINER: runner},
+        )
+        plan = TransactionPlan(
+            Goal("container", ["done"]),
+            [ActionStep("sandbox_command", {"argv": ["echo", "hi"]}, "run")],
+        )
+
+        result = manager.execute_plan(plan, WorldState())
+
+        self.assertEqual(result.steps[0].status.value, "verified")
+        self.assertTrue(runner.called)
+
+
+class _FakeRunner:
+    def __init__(self) -> None:
+        self.called = False
+
+    def run(self, command: SandboxCommand):
+        from leos_agent.sandbox import SandboxResult
+
+        self.called = True
+        return SandboxResult(True, 0, "ok", "", message="ok")
 
 
 if __name__ == "__main__":

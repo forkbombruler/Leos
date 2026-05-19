@@ -1,0 +1,6 @@
+{
+  "name": "network_ssrf_dns_private_ip",
+  "threat_model": "A public-looking hostname resolves to a private network address.",
+  "expected": "DNS-aware URL policy blocks the host",
+  "severity": "critical"
+}

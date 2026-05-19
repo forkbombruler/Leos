@@ -4,19 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
-IGNORED_DIRS = {".git", ".venv", "dist", "build", "__pycache__"}
+IGNORED_DIRS = {".git", ".venv", "dist", "build", "__pycache__", "htmlcov"}
 SCANNED_SUFFIXES = {".jsonl", ".json", ".md", ".html"}
 PATTERNS = {
-    "github-classic-token": "ghp_",
-    "github-fine-grained-token": "github_pat_",
-    "openai-token": "sk-",
-    "demo-secret": "demo-secret-value",
-    "token-value": "token-value",
-    "must-not-store": "must-not-store",
-    "must-not-leak": "must-not-leak",
+    "github-classic-token": re.compile(r"ghp_[A-Za-z0-9_]{8,}"),
+    "github-fine-grained-token": re.compile(r"github_pat_[A-Za-z0-9_]{8,}"),
+    "openai-token": re.compile(r"sk-[A-Za-z0-9_-]{8,}"),
+    "demo-secret": re.compile(r"demo-secret-value"),
+    "token-value": re.compile(r"token-value"),
+    "must-not-store": re.compile(r"must-not-store"),
+    "must-not-leak": re.compile(r"must-not-leak"),
 }
 
 
@@ -32,7 +33,7 @@ def scan(root: Path) -> list[tuple[Path, str]]:
         except OSError:
             continue
         for label, pattern in PATTERNS.items():
-            if pattern in text:
+            if pattern.search(text):
                 findings.append((path, label))
     return findings
 

@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
+from examples.github_rest_agent.run_full_dry_run import FullDryRunGitHubTransport, build_registry
+from examples.github_rest_agent.run_full_dry_run import run as run_full_dry_run
 from leos_agent import (
     AgentKernel,
     AgentLoop,
@@ -14,6 +16,7 @@ from leos_agent import (
     ApprovalGate,
     AuditLog,
     CausalGraph,
+    GitHubCheckCIStatusTool,
     GitHubCreateBranchTool,
     GitHubGetFileTool,
     GitHubHTTPResponse,
@@ -32,6 +35,7 @@ from leos_agent import (
     Secret,
     ToolRegistry,
     WorldState,
+    render_trace_markdown,
 )
 
 
@@ -119,6 +123,7 @@ def _registry(client: GitHubRESTClient) -> ToolRegistry:
         GitHubCreateBranchTool(client),
         GitHubUpdateFileTool(client),
         GitHubOpenPRTool(client),
+        GitHubCheckCIStatusTool(client),
     ):
         registry.register(tool)
     return registry
@@ -220,6 +225,94 @@ class GitHubAgentOrchestrationTests(unittest.TestCase):
         proposals = provider.propose(Goal("Fix", ["PR opened"]), WorldState(), ToolRegistry())
 
         self.assertEqual(proposals, [])
+
+    def test_full_dry_run_demo_generates_artifacts_without_token(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = run_full_dry_run(Path(tmp))
+
+            self.assertTrue(summary["succeeded"])
+            for key in ("audit_log", "trace_markdown", "trace_html", "summary_json"):
+                content = Path(str(summary[key])).read_text(encoding="utf-8")
+                self.assertNotIn("demo-token", content)
+
+    def test_full_dry_run_duplicate_run_does_not_duplicate_pr(self) -> None:
+        transport = FullDryRunGitHubTransport()
+        client = GitHubRESTClient(transport=transport)
+        audit = AuditLog()
+        kernel = self._kernel(build_registry(client), audit)
+        provider = GitHubIssuePlanProvider(
+            GitHubIssuePlanConfig(
+                repo="Leos-byte/Leos",
+                issue_number=42,
+                path="README.md",
+                base_branch="main",
+                branch="leos/issue-42",
+                new_content="# Demo\n\nFixes issue #42.\n",
+                token=Secret("ghp_test_secret"),
+                idempotency_key="same",
+                check_ci=True,
+                ci_ref="leos/issue-42",
+            )
+        )
+        goal = Goal("Fix issue 42", ["file updated", "PR opened", "CI passed"], stop_conditions=["done"])
+
+        first = AgentLoop(kernel, provider, config=AgentLoopConfig(max_iterations=2)).run(goal)
+        second_audit = AuditLog()
+        second_kernel = self._kernel(build_registry(client), second_audit)
+        second_provider = GitHubIssuePlanProvider(provider.config)
+        second = AgentLoop(second_kernel, second_provider, config=AgentLoopConfig(max_iterations=2)).run(goal)
+
+        self.assertTrue(first.succeeded)
+        self.assertTrue(second.succeeded)
+        self.assertEqual(len(transport.pull_requests), 1)
+
+    def test_full_dry_run_expected_previous_mismatch_blocks(self) -> None:
+        transport = FullDryRunGitHubTransport(expected_previous="changed elsewhere\n")
+        client = GitHubRESTClient(transport=transport)
+        tool = GitHubUpdateFileTool(client)
+
+        result = tool.execute(
+            {
+                "repo": "Leos-byte/Leos",
+                "path": "README.md",
+                "branch": "leos/issue-42",
+                "content": "# Demo\n\nFixes issue #42.\n",
+                "message": "fix",
+                "expected_previous": "# Demo\n",
+                "token": Secret("ghp_test_secret"),
+            },
+            WorldState(),
+        )
+
+        self.assertFalse(result.ok)
+
+    def test_plain_token_is_rejected_in_orchestration_tool(self) -> None:
+        transport = FullDryRunGitHubTransport()
+        client = GitHubRESTClient(transport=transport)
+        tool = GitHubReadIssueTool(client)
+
+        result = tool.execute({"repo": "Leos-byte/Leos", "issue_number": 42, "token": "ghp_plain_token"}, WorldState())
+
+        self.assertFalse(result.ok)
+        self.assertEqual(transport.calls, [])
+
+    def test_protected_branch_cleanup_is_rejected(self) -> None:
+        tool = GitHubCreateBranchTool(GitHubRESTClient(transport=FullDryRunGitHubTransport()))
+
+        result = tool.rollback({"repo": "Leos-byte/Leos", "branch": "main"}, WorldState())
+
+        self.assertFalse(result.ok)
+
+    def test_trace_does_not_leak_token(self) -> None:
+        audit = AuditLog()
+        audit.record("demo", "token should be blocked", token="ghp_must_not_leak")
+
+        trace = render_trace_markdown(audit.records())
+
+        self.assertNotIn("ghp_must_not_leak", trace)
 
 
 if __name__ == "__main__":

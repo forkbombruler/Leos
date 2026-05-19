@@ -33,6 +33,8 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - Secret exfiltration: secret values leak to audit, memory, model prompts, stdout, or tool output.
 - Workspace escape: path traversal reads or writes outside the workspace.
 - SSRF: network tools attempt localhost, private IPs, or metadata services.
+- DNS rebinding / DNS SSRF: a public-looking hostname resolves to private or
+  metadata IP space.
 - Policy bypass: policy-as-code or model output attempts to auto-approve actions.
 - Rollback failure: a reversible or compensatable action cannot be restored.
 - Audit tampering: records are deleted, edited, or reordered.
@@ -55,8 +57,14 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - Audit logs use append-only hash-chain integrity checks.
 - Workspace tools resolve and reject path escapes.
 - Network safety policy blocks localhost, private ranges, metadata IPs, and non-HTTP(S) schemes.
+- DNS-aware URL policy can be enabled with an injected resolver and blocks
+  hostnames resolving to private, loopback, link-local, reserved, unspecified,
+  multicast, or metadata IPs.
 - Safety evals cover workspace escape, prompt injection, secret exfiltration, policy bypass, rollback, SSRF, high-risk approval, and output schema violations.
 - Docker sandbox command construction uses conservative defaults, but CI does not prove full runtime isolation.
+- Docker/Podman sandbox runner is opt-in and uses conservative defaults
+  including network none, read-only root filesystem, dropped capabilities,
+  no-new-privileges, pids, memory, and CPU limits.
 - GitHub tools support idempotency and optimistic file update guards.
 - `GitHubRESTClient` uses injectable transports for tests, redacts API errors,
   rejects protected branch deletion, and uses hidden PR idempotency markers.
@@ -90,6 +98,8 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
   token issuance, and operator approval UX beyond the fake-transport demo.
 - `JsonlRuntimeStore` is a development persistence layer and does not provide
   production concurrency, migration, or retention guarantees.
+- `SQLiteRuntimeStore` improves local restart recovery but is not a
+  distributed production store.
 - `InMemoryCredentialVault` is not a production KMS, OS keychain, or cloud
   secrets manager.
 

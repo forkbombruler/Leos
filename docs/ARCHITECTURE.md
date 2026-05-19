@@ -103,6 +103,9 @@ Runtime progress can optionally be persisted with `RuntimeStore`.
 `InMemoryRuntimeStore` is for tests and demos; `JsonlRuntimeStore` is a
 development store for goals, plans, runtime events, and checkpoints. It is not a
 production database or strong-concurrency storage layer.
+`SQLiteRuntimeStore` provides stronger local persistence and restart recovery
+for the same RuntimeStore interface, but it is still not a distributed
+production database.
 Runtime store writes pass through the shared sanitization boundary. Events and
 checkpoints reject `Secret` values, redaction markers embedded in strings, and
 common token-like literals before persistence.
@@ -182,5 +185,10 @@ replan or stop
 
 - Implemented: local dev tools, network trust boundaries, safety evals, proof generation, task queue persistence.
 - Implemented with fake-transport tests: GitHub REST client for issue/file/branch/PR/comment/CI workflows and issue-to-PR AgentLoop orchestration.
-- Partial: causal contract runtime enforcement, Docker/podman command construction.
+- Partial: causal contract runtime enforcement. The causal model is
+  tool-contract verification, not a full structural causal model.
+- Opt-in: Docker/Podman sandboxing requires a local container runtime and is
+  not enabled by default.
+- Opt-in: DNS-aware SSRF checks depend on resolver results; production still
+  needs egress firewalls.
 - Not complete: production autonomy, full SQLite persistence for all state, formal safety proof, deployment egress controls.

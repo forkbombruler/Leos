@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from .audit import AuditLog
 from .causal import CausalGraph, CounterfactualReview
-from .enums import GoalStatus
+from .enums import GoalStatus, SandboxPolicy
 from .goals import Goal
 from .memory import MemoryStore
 from .planner import Planner
@@ -18,6 +18,7 @@ from .plans import (
     TransactionPlan,
 )
 from .policy import ApprovalGate, PolicyEngine
+from .sandbox import SandboxRunner
 from .state import WorldState
 from .tools import ToolRegistry
 from .transactions import TransactionManager
@@ -37,6 +38,7 @@ class AgentKernel:
         planner_config: PlannerConfig | None = None,
         counterfactual_review: CounterfactualReview | None = None,
         allow_network_tools: bool = False,
+        sandbox_runners: Mapping[SandboxPolicy, SandboxRunner] | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy
@@ -53,6 +55,7 @@ class AgentKernel:
             approval_gate=approval_gate,
             counterfactual_review=counterfactual_review,
             allow_network_tools=allow_network_tools,
+            sandbox_runners=sandbox_runners,
         )
 
     def build_plan(self, goal: Goal, steps: Sequence[ActionStep]) -> TransactionPlan:

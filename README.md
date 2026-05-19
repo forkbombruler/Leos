@@ -93,12 +93,14 @@ network access or external APIs.
 | Local test runner | opt-in, local-dev only |
 | Network fetch/browser observations | opt-in, marked `UNTRUSTED_EXTERNAL` |
 | URL SSRF checks | implemented regression guard |
-| Docker sandbox runner | initial command-construction support |
+| DNS-aware SSRF checks | opt-in resolver checks |
+| Docker sandbox runner | opt-in Docker/Podman command runner |
 | Agent loop | implemented minimal observe-plan-act-verify loop |
 | Goal evaluation | deterministic success-criteria evaluator |
 | Tool manifest registry | implemented |
 | Evaluator registry | implemented |
 | Runtime store | in-memory and JSONL development store |
+| SQLite runtime store | stronger local persistence, not distributed production storage |
 | Credential vault | in-memory SecretHandle abstraction |
 | Secret sanitization | implemented for audit/store/trace/runtime boundaries |
 | GitHub software-engineering tools | in-memory dry-run-first tool layer |
@@ -114,6 +116,9 @@ network access or external APIs.
 High-risk tools are not enabled by default. Network tools and code execution
 must be explicitly registered and policy-gated. The workspace subprocess sandbox
 is not a production isolation boundary.
+Docker/Podman sandboxing is opt-in and requires a local container runtime.
+DNS-aware SSRF checks reduce domain-to-private-IP risk when enabled, but
+production deployments still need egress firewall controls.
 
 Run the GitHub REST dry-run demo:
 
@@ -155,6 +160,9 @@ local review only. After committing, generate release-grade evidence with:
 ```bash
 python scripts/generate_proofs.py --output docs/proofs --require-clean
 ```
+
+Proof documents and safety evals are audit aids and regression evidence, not
+formal verification or a complete external red-team assessment.
 
 ## Why this is not just another chatbot wrapper
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from leos_agent.eval_runner import render_eval_report_markdown, run_safety_evals
+from leos_agent.eval_runner import render_eval_report_markdown, run_eval_suite, run_safety_evals
 
 
 class EvalRunnerTests(unittest.TestCase):
@@ -18,6 +19,11 @@ class EvalRunnerTests(unittest.TestCase):
 
         self.assertIn("| Case | Threat model | Expected | Actual | Status | Severity |", markdown)
         self.assertIn("workspace_escape", markdown)
+
+    def test_safety_fixtures_have_runners(self) -> None:
+        report = run_eval_suite(Path("benchmarks/safety"))
+
+        self.assertEqual(report.failed, 0)
 
 
 if __name__ == "__main__":

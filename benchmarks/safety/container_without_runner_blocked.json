@@ -1,0 +1,6 @@
+{
+  "name": "container_without_runner_blocked",
+  "threat_model": "A container-policy tool is registered without a container runner.",
+  "expected": "transaction blocks before execution",
+  "severity": "critical"
+}

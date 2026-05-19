@@ -319,7 +319,7 @@ class GitHubRESTClient:
     def ci_status(self, repo: str, ref: str, token: str | None = None) -> dict[str, Any]:
         owner, name = parse_repo(repo)
         _validate_ref(ref)
-        data = self._request_json("GET", f"/repos/{owner}/{name}/commits/{_quote_path(ref)}/status", token=token)
+        data = self._request_json("GET", f"/repos/{owner}/{name}/commits/{quote(ref, safe='')}/status", token=token)
         state = str(data.get("state", "unknown"))
         if state not in {"success", "failure", "pending", "error"}:
             state = "unknown"
