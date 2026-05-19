@@ -98,6 +98,7 @@ network access or external APIs.
 | Goal evaluation | deterministic success-criteria evaluator |
 | GitHub software-engineering tools | in-memory dry-run-first tool layer |
 | GitHub REST client | implemented with fake-transport tests; real writes gated |
+| GitHub issue-to-PR orchestration | AgentLoop dry-run path with fake REST transport |
 | Local software engineering demo | implemented, no network/API token required |
 | Safety benchmark fixtures | implemented for regression loading |
 | Safety eval suite | implemented regression suite |
@@ -123,6 +124,18 @@ operations must still run through the tool layer, `PolicyEngine`,
 require `expected_sha` or `expected_previous`, PR creation supports a hidden
 Leos idempotency marker, and protected branches such as `main` and `master` are
 not deleted by cleanup logic.
+
+Run the end-to-end GitHub issue orchestration demo:
+
+```bash
+python examples/github_rest_agent/run_orchestration.py
+```
+
+This demo uses `GitHubRESTClient` with an in-process fake transport and goes
+through `AgentLoop -> PlanProposal -> TransactionManager -> GitHub tools`.
+It first observes the issue and target file, then replans to create a branch,
+update the file with `expected_previous`, and open an idempotent PR. It performs
+no real GitHub write.
 
 ## Proof documents
 

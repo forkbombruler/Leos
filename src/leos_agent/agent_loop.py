@@ -132,21 +132,21 @@ class AgentLoop:
             )
 
             executed = self.kernel.run(plan)
-            current_goal = executed.goal
+            plan_goal = executed.goal
             self.audit_log.record(
                 "loop.plan_executed",
                 "Agent loop executed selected plan",
-                goal_id=current_goal.goal_id,
+                goal_id=plan_goal.goal_id,
                 iteration=iteration,
                 plan_id=executed.plan_id,
-                goal_status=current_goal.status.value,
+                goal_status=plan_goal.status.value,
             )
 
             progress = self.kernel.transactions.track_progress(executed)
             self.audit_log.record(
                 "loop.goal_progress_checked",
                 "Agent loop checked goal progress",
-                goal_id=current_goal.goal_id,
+                goal_id=plan_goal.goal_id,
                 iteration=iteration,
                 verified_steps=progress.verified_steps,
                 blocked_steps=progress.blocked_steps,
@@ -155,11 +155,11 @@ class AgentLoop:
                 phase=progress.phase,
             )
             if self.config.use_goal_evaluator:
-                evaluation = self.goal_evaluator.evaluate(current_goal, self.kernel.state, progress)
+                evaluation = self.goal_evaluator.evaluate(plan_goal, self.kernel.state, progress)
                 self.audit_log.record(
                     "loop.goal_evaluated",
                     "Agent loop evaluated goal success criteria",
-                    goal_id=current_goal.goal_id,
+                    goal_id=plan_goal.goal_id,
                     iteration=iteration,
                     evaluation_status=evaluation.status.value,
                     satisfied_criteria=list(evaluation.satisfied_criteria),
@@ -167,11 +167,15 @@ class AgentLoop:
                     explanation=evaluation.explanation,
                     evidence_keys=sorted(evaluation.evidence),
                 )
-                current_goal = self._transition_goal_for_evaluation(current_goal, evaluation)
+                if self._evaluation_stop_reason(evaluation):
+                    current_goal = self._transition_goal_for_evaluation(plan_goal, evaluation)
+            else:
+                current_goal = plan_goal
             self._write_iteration_memory(current_goal, iteration, progress)
 
-            stop_reason = self._evaluation_stop_reason(evaluation) if evaluation is not None else ""
-            if not stop_reason:
+            if self.config.use_goal_evaluator:
+                stop_reason = self._evaluation_stop_reason(evaluation)
+            else:
                 stop_reason = self._stop_reason(current_goal)
             if stop_reason:
                 break

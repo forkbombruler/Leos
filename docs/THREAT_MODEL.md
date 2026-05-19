@@ -48,6 +48,9 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - GitHub tools support idempotency and optimistic file update guards.
 - `GitHubRESTClient` uses injectable transports for tests, redacts API errors,
   rejects protected branch deletion, and uses hidden PR idempotency markers.
+- GitHub issue-to-PR orchestration uses the same `AgentLoop` and transaction
+  path as local tools; the planner provider observes issue/file state before
+  proposing write steps and never calls GitHub directly.
 
 ## Mitigations Still Missing
 - Production-grade container or microVM isolation with integration tests against a real runtime.
@@ -56,6 +59,8 @@ Leos is a bounded, auditable agent runtime. It is not production-ready autonomou
 - Stronger secret scanning across every stdout/stderr/result path.
 - Broader adversarial benchmark coverage for long-running software engineering tasks.
 - Real GitHub token scope verification and deployment policy for production use.
+- Live GitHub issue-to-PR runs still need deployment policy, least-privilege
+  token issuance, and operator approval UX beyond the fake-transport demo.
 
 ## Security Invariants
 - No high-risk or consequential action executes silently without policy/approval.

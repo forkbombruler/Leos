@@ -58,6 +58,7 @@ from .errors import (
     WorkspaceEscapeBlocked,
 )
 from .eval_runner import EvalReport, format_eval_report, render_eval_report_markdown, run_eval_suite, run_safety_evals
+from .github_agent import GitHubIssuePlanConfig, GitHubIssuePlanProvider
 from .github_client import (
     GitHubAPIError,
     GitHubAuthError,
@@ -239,6 +240,8 @@ __all__ = [
     "GitHubCreateBranchTool",
     "GitHubGetFileTool",
     "GitHubHTTPResponse",
+    "GitHubIssuePlanConfig",
+    "GitHubIssuePlanProvider",
     "GitHubNotFoundError",
     "GitHubOpenPRTool",
     "GitHubRESTClient",

@@ -82,6 +82,13 @@ transport, but real writes remain consequential tool actions: file updates need
 `expected_sha` or `expected_previous`, PR creation uses an idempotency marker,
 and protected branches are not deleted by rollback or cleanup.
 
+`GitHubIssuePlanProvider` is a deterministic bridge between GitHub observations
+and the closed loop runtime. It does not call GitHub directly. Its first
+proposal reads the issue and target file through normal tools. Once those facts
+exist in `WorldState`, it proposes the branch/update/PR transaction, keeping the
+same `AgentLoop -> Planner -> TransactionManager -> PolicyEngine` path as other
+runtime actions.
+
 ### 6. Memory and learning
 
 Memory records contain:
@@ -148,6 +155,6 @@ replan or stop
 ## Current readiness boundaries
 
 - Implemented: local dev tools, network trust boundaries, safety evals, proof generation, task queue persistence.
-- Implemented with fake-transport tests: GitHub REST client for issue/file/branch/PR/comment/CI workflows.
+- Implemented with fake-transport tests: GitHub REST client for issue/file/branch/PR/comment/CI workflows and issue-to-PR AgentLoop orchestration.
 - Partial: causal contract runtime enforcement, Docker/podman command construction.
 - Not complete: production autonomy, full SQLite persistence for all state, formal safety proof, deployment egress controls.
