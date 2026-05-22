@@ -150,11 +150,12 @@ class MemoryStore:
     ) -> list[dict[str, Any]]:
         now = time.time()
         candidates = self._index.get(key, ())
+        target_type = MemoryType(memory_type) if memory_type is not None else None
         records = []
         for item in candidates:
             if scope is not None and item.scope != scope:
                 continue
-            if memory_type is not None and item.memory_type is not MemoryType(memory_type):
+            if target_type is not None and item.memory_type is not target_type:
                 continue
             if not include_expired and item.is_expired(now):
                 continue

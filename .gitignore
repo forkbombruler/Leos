@@ -33,3 +33,9 @@ Thumbs.db
 # Leos runtime artifacts
 .leos-workspace/
 *.leos-audit.jsonl
+
+# Claude Code
+.claude/
+
+# Ruff
+.ruff_cache/

@@ -76,6 +76,20 @@ class TestResultTool:
         return ToolResult(True, "rollback")
 
 
+class StaleEvalProposalProvider:
+    """Returns plans but records the goal received so we can assert it updates."""
+
+    def __init__(self, proposals: list[PlanProposal]) -> None:
+        self._proposals = proposals
+        self.calls = 0
+        self.received_goal_statuses: list[str] = []
+
+    def propose(self, goal: Goal, state: WorldState, registry: ToolRegistry) -> list[PlanProposal]:
+        self.received_goal_statuses.append(goal.status.value)
+        self.calls += 1
+        return list(self._proposals)
+
+
 class AgentLoopTests(unittest.TestCase):
     def _kernel(self, registry: ToolRegistry, audit: AuditLog | None = None) -> AgentKernel:
         return AgentKernel(
@@ -244,6 +258,31 @@ class AgentLoopTests(unittest.TestCase):
             "loop.finished",
         }:
             self.assertIn(expected, event_types)
+
+    def test_eval_partial_updates_current_goal_for_next_iteration(self) -> None:
+        registry = ToolRegistry()
+        registry.register(TestResultTool(True))
+        kernel = self._kernel(registry)
+        goal = Goal("verify", ["tests pass", "coverage report"], stop_conditions=["stop"])
+        proposal = PlanProposal([ActionStep("test_result", {}, "record")], "record")
+        provider = StaleEvalProposalProvider([proposal, proposal])
+
+        result = AgentLoop(
+            kernel,
+            provider,
+            config=AgentLoopConfig(max_iterations=2),
+        ).run(goal)
+
+        self.assertEqual(result.iterations, 2)
+        self.assertEqual(provider.calls, 2)
+        self.assertGreaterEqual(len(provider.received_goal_statuses), 2)
+        self.assertEqual(provider.received_goal_statuses[0], "created")
+        self.assertNotEqual(
+            provider.received_goal_statuses[1],
+            "created",
+            "After a partial evaluation, iteration 2 must receive the updated goal"
+            " (status != 'created'), not the stale original goal.",
+        )
 
 
 if __name__ == "__main__":
