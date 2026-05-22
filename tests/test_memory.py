@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 
-from leos_agent.memory import MemoryStore, MemoryType, MemorySensitivity
+from leos_agent.memory import MemoryStore, MemoryType
 
 
 class MemoryStoreRecallFilterTests(unittest.TestCase):
