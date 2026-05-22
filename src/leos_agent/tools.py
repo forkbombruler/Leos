@@ -77,6 +77,8 @@ class ToolSpec:
     output_schema: JSONSchema = field(default_factory=dict)
     timeout_ms: int = 3000
     network_access: bool = False
+    egress_host: str | None = None
+    egress_methods: Sequence[str] = ()
     filesystem_scope: str = "none"
     secrets_allowed: bool = False
     sandbox_policy: SandboxPolicy = SandboxPolicy.NONE
@@ -109,6 +111,8 @@ class ToolSpec:
             output_schema=self.output_schema,
             timeout_ms=self.timeout_ms,
             network_access=self.network_access,
+            egress_host=self.egress_host,
+            egress_methods=tuple(self.egress_methods),
             filesystem_scope=self.filesystem_scope,
             secrets_allowed=self.secrets_allowed,
             sandbox_policy=self.sandbox_policy,

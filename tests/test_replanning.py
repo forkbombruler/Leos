@@ -13,7 +13,10 @@ from leos_agent import (
     PolicyEngine,
     ToolRegistry,
 )
-from leos_agent.replanning import FailureType
+from leos_agent.audit import AuditLog
+from leos_agent.enums import StepStatus
+from leos_agent.plans import TransactionPlan
+from leos_agent.replanning import FailureAnalyzer, FailureType
 
 
 class _RepairProvider:
@@ -94,6 +97,58 @@ class ReplanningTests(unittest.TestCase):
         ).run(Goal("repair", ["do the task"], stop_conditions=["done"]))
 
         self.assertEqual(result.stop_reason, "tool_call_budget_exceeded")
+
+    def test_causal_contract_policy_message_classifies_as_causal(self) -> None:
+        analysis = _analyze_event(
+            "causal_contract.missing",
+            "Step blocked by production policy: missing causal_contract",
+        )
+
+        self.assertIs(analysis.failure_type, FailureType.CAUSAL_CONTRACT_FAILED)
+
+    def test_causal_contract_verification_event_classifies_as_causal(self) -> None:
+        analysis = _analyze_event("step.causal_contract_verification_failed", "field violation")
+
+        self.assertIs(analysis.failure_type, FailureType.CAUSAL_CONTRACT_FAILED)
+
+    def test_output_schema_event_classifies_before_execution(self) -> None:
+        analysis = _analyze_event("step.output_schema_failed", "execution produced invalid output_schema")
+
+        self.assertIs(analysis.failure_type, FailureType.OUTPUT_SCHEMA_FAILED)
+
+    def test_egress_policy_block_classifies_as_network(self) -> None:
+        analysis = _analyze_event("policy.blocked", "production egress policy does not allow GET api.github.com")
+
+        self.assertIs(analysis.failure_type, FailureType.NETWORK_BLOCKED)
+
+    def test_permission_missing_classifies_as_policy_denied(self) -> None:
+        analysis = _analyze_event("policy.blocked", "missing permission write_files")
+
+        self.assertIs(analysis.failure_type, FailureType.POLICY_DENIED)
+
+    def test_approval_rejected_classifies_as_approval_denied(self) -> None:
+        analysis = _analyze_event("approval.rejected", "human denied")
+
+        self.assertIs(analysis.failure_type, FailureType.APPROVAL_DENIED)
+
+    def test_sandbox_unavailable_classifies_as_sandbox(self) -> None:
+        analysis = _analyze_event("step.blocked", "container sandbox not available")
+
+        self.assertIs(analysis.failure_type, FailureType.SANDBOX_UNAVAILABLE)
+
+    def test_timeout_classifies_as_timeout(self) -> None:
+        analysis = _analyze_event("step.execution_failed", "timeout after 1 seconds")
+
+        self.assertIs(analysis.failure_type, FailureType.TIMEOUT)
+
+
+def _analyze_event(event_type: str, message: str):
+    audit = AuditLog()
+    audit.record(event_type, message, reason=message)
+    step = ActionStep("echo", {"message": "x"}, "x")
+    step.status = StepStatus.BLOCKED
+    plan = TransactionPlan(Goal("g", ["done"]), [step])
+    return FailureAnalyzer().analyze(plan, audit)
 
 
 if __name__ == "__main__":

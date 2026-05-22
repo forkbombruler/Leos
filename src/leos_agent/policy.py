@@ -321,13 +321,16 @@ class PolicyEngine:
         if tool.spec.network_access or Permission.NETWORK in tool.spec.permissions:
             host = str(
                 step.arguments.get("host") or step.arguments.get("hostname") or step.arguments.get("domain") or ""
-            )
-            method = str(step.arguments.get("method", "GET"))
+            ) or (tool.spec.egress_host or "")
+            methods = _egress_methods_for_step(step, tool)
             if self.egress_policy is None:
                 return "production_locked_down forbids network tools without an explicit egress policy"
-            if not self.egress_policy.allows(host, method):
+            if not host:
+                return "production_locked_down egress policy does not allow GET <missing-host>"
+            if not any(self.egress_policy.allows(host, method) for method in methods):
                 target = host or "<missing-host>"
-                return f"production_locked_down egress policy does not allow {method.upper()} {target}"
+                methods_label = ",".join(method.upper() for method in methods)
+                return f"production_locked_down egress policy does not allow {methods_label} {target}"
         if (
             self.require_strong_sandbox_for_execute
             and Permission.EXECUTE_CODE in tool.spec.permissions
@@ -575,6 +578,14 @@ def _as_list(value: Any) -> list[Any]:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return [value]
+
+
+def _egress_methods_for_step(step: ActionStep, tool: Tool) -> tuple[str, ...]:
+    if step.arguments.get("method") is not None:
+        return (str(step.arguments["method"]).upper(),)
+    if tool.spec.egress_methods:
+        return tuple(str(method).upper() for method in tool.spec.egress_methods)
+    return ("GET",)
 
 
 @dataclass(frozen=True)

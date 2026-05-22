@@ -1,6 +1,6 @@
 # Source Snapshot
 
-Generated: `2026-05-22T08:45:22.621481+00:00`
+Generated: `2026-05-22T10:12:24.074345+00:00`
 
 | Path | SHA256 | Lines | Size | Exists |
 |---|---|---:|---:|---|
@@ -16,10 +16,10 @@ Generated: `2026-05-22T08:45:22.621481+00:00`
 | `src/leos_agent/sqlite_store.py` | `b1842bfbb0675bb772ca949632ac6866941ea9617a799bf5fa6367335030556f` | 202 | 7799 | True |
 | `src/leos_agent/task_queue.py` | `af94e06cf7a3efd2adcf5f9763962adb3700b442a8b5568f52cb114de4c0b412` | 446 | 16904 | True |
 | `src/leos_agent/causal.py` | `65fa034bbbbca2f0e1484e708a3f27cbbdf312f69a99e3953e77393773bdc4d0` | 206 | 7792 | True |
-| `src/leos_agent/causal_contract.py` | `7f430251972bd2b7b98e6864b0973aaba631f58adc8568a637f8456bb9ea3b47` | 127 | 4860 | True |
-| `src/leos_agent/tools.py` | `c60075cf510f3c252dc9aecd5afe3215e8e483350c14dffcac7b915e19752612` | 274 | 10192 | True |
-| `src/leos_agent/transactions.py` | `52994f164bb5b4f048db85872644221fa66d40d65a916779ea18078cd28695c3` | 772 | 33170 | True |
-| `src/leos_agent/policy.py` | `32707a08c711e6c71391dcc64165df1a0c540b3137c7ec5ae85a22eda319e906` | 593 | 26338 | True |
+| `src/leos_agent/causal_contract.py` | `39ad91a2ae5f6c26efd30ecde26b042de855466869d8131762058e2d1d31e95e` | 204 | 8438 | True |
+| `src/leos_agent/tools.py` | `79b5cf44cdd61595102dda54f73df15e070b26d66096a4b9700b6af1b5dabf9e` | 278 | 10363 | True |
+| `src/leos_agent/transactions.py` | `6ee01213967b7f05bd3955f4a9a727d81fb14ce7d547e831f28a2741b528aa1e` | 788 | 33957 | True |
+| `src/leos_agent/policy.py` | `423460fa2586b67fee9736fc1713784c197f660a66acfee47aa88c053810a59d` | 604 | 26914 | True |
 | `src/leos_agent/audit.py` | `10c1eae24df13b34e0d6a7c72577e5c609408a3a4694018ff64f6e0661b5c3da` | 239 | 9477 | True |
 | `src/leos_agent/memory.py` | `1c53fc38e0c1d24c2b5c7d6c60e8de538a9e39655f58eb0b03cb90c91c5c7317` | 182 | 6106 | True |
 | `src/leos_agent/trace_viewer.py` | `5931813b2a6ca2d6d9a89220ed2848b907e36ebe2789ab11b067202e6b771de9` | 164 | 6019 | True |

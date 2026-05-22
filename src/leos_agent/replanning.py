@@ -116,24 +116,24 @@ def _classify(event_type: str, reason: str, message: str) -> FailureType:
         return FailureType.UNKNOWN_TOOL
     if "sandbox" in text or "container sandbox not available" in text:
         return FailureType.SANDBOX_UNAVAILABLE
-    if "network" in text:
+    if "network" in text or "egress" in text:
         return FailureType.NETWORK_BLOCKED
-    if "policy" in text or "permission" in text:
-        return FailureType.POLICY_DENIED
+    if "causal_contract" in event_type or "verification" in event_type:
+        return FailureType.CAUSAL_CONTRACT_FAILED
+    if "output_schema" in event_type:
+        return FailureType.OUTPUT_SCHEMA_FAILED
     if "precondition" in event_type:
         return FailureType.PRECONDITION_FAILED
     if "dry_run" in event_type:
         return FailureType.DRY_RUN_FAILED
-    if "execution" in event_type:
-        return FailureType.EXECUTION_FAILED
-    if "output_schema" in event_type:
-        return FailureType.OUTPUT_SCHEMA_FAILED
-    if "causal_contract" in event_type or "verification" in event_type:
-        return FailureType.CAUSAL_CONTRACT_FAILED
-    if "postcondition" in event_type:
-        return FailureType.POSTCONDITION_FAILED
     if "timeout" in text:
         return FailureType.TIMEOUT
+    if "execution" in event_type:
+        return FailureType.EXECUTION_FAILED
+    if "postcondition" in event_type:
+        return FailureType.POSTCONDITION_FAILED
+    if "policy" in text or "permission" in text:
+        return FailureType.POLICY_DENIED
     return FailureType.UNKNOWN
 
 

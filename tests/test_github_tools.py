@@ -106,6 +106,7 @@ class GitHubToolsTests(unittest.TestCase):
             CausalGraph(),
             audit,
             ApprovalGate(lambda step: True),
+            allow_network_tools=True,
         )
         plan = TransactionPlan(
             Goal("read", ["read"], stop_conditions=["done"]),
@@ -155,6 +156,7 @@ class GitHubToolsTests(unittest.TestCase):
             CausalGraph(),
             audit,
             ApprovalGate(lambda step: True),
+            allow_network_tools=True,
         )
         plan = TransactionPlan(
             Goal("read", ["read"], stop_conditions=["done"]),
@@ -316,6 +318,7 @@ class GitHubToolsTests(unittest.TestCase):
             CausalGraph(),
             audit,
             ApprovalGate(lambda step: True),
+            allow_network_tools=True,
         )
         plan = TransactionPlan(
             Goal("read", ["read"], stop_conditions=["done"]),

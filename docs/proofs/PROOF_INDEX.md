@@ -2,9 +2,9 @@
 
 - Proof status: `release_grade`
 - Release grade: `True`
-- Generated at: `2026-05-22T08:45:22.621481+00:00`
-- Commit SHA: `6d497631aacaaa1632370efc8f28efac41168d15`
-- Branch: `fix/pr-21-review-improvements`
+- Generated at: `2026-05-22T10:12:24.074345+00:00`
+- Commit SHA: `23012acee3d4d56137a271ecb1eea39ca23fec11`
+- Branch: `fix/github-egress-causal-hardening`
 - Dirty worktree: `False`
 - Summary: {'total': 12, 'passed': 12, 'failed': 0, 'skipped': 0}
 

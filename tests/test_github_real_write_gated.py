@@ -6,7 +6,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from leos_agent import InMemoryGitHubClient, LeosError, Secret
+from examples.github_rest_agent.run_real_write_gated import _production_github_policy, _tool_mediated_get_file
+from leos_agent import AgentKernel, AuditLog, GitHubGetFileTool, InMemoryGitHubClient, LeosError, Secret, ToolRegistry
 from leos_agent.github_tools import GitHubUpdateFileTool, _token_or_error
 from leos_agent.state import WorldState
 
@@ -50,6 +51,68 @@ class GitHubRealWriteGatedTests(unittest.TestCase):
         client.read_issue("owner/repo", 1, token=Secret("token-value").unwrap())
         self.assertEqual(client.accepted_token_count, 1)
         self.assertNotIn("token-value", repr(client))
+
+    def test_tool_mediated_preread_records_audit_event(self) -> None:
+        client = InMemoryGitHubClient()
+        client.seed_file("owner/repo", "main", "x.txt", "content")
+        kernel = _github_get_file_kernel(client)
+
+        result = _tool_mediated_get_file(
+            kernel,
+            repo="owner/repo",
+            path="x.txt",
+            ref="main",
+            token=Secret("ghp_test_secret"),
+            purpose="preread",
+            allow_missing=False,
+        )
+
+        self.assertEqual(result["content"], "content")
+        event_types = [event.event_type for event in kernel.audit_log.events]
+        self.assertIn("github.real_write.tool_mediated_preread", event_types)
+        self.assertNotIn("github.real_write.readback_direct_client_call", event_types)
+        self.assertNotIn("ghp_test_secret", repr(kernel.audit_log.records()))
+
+    def test_tool_mediated_preread_missing_can_proceed(self) -> None:
+        kernel = _github_get_file_kernel(InMemoryGitHubClient())
+
+        result = _tool_mediated_get_file(
+            kernel,
+            repo="owner/repo",
+            path="new.txt",
+            ref="main",
+            token=Secret("ghp_test_secret"),
+            purpose="preread",
+            allow_missing=True,
+        )
+
+        self.assertIsNone(result)
+        event_types = [event.event_type for event in kernel.audit_log.events]
+        self.assertIn("github.real_write.tool_mediated_preread_missing", event_types)
+
+    def test_tool_mediated_readback_missing_fails(self) -> None:
+        kernel = _github_get_file_kernel(InMemoryGitHubClient())
+
+        with self.assertRaises(LeosError):
+            _tool_mediated_get_file(
+                kernel,
+                repo="owner/repo",
+                path="missing.txt",
+                ref="branch",
+                token=Secret("ghp_test_secret"),
+                purpose="readback",
+                allow_missing=False,
+            )
+
+
+def _github_get_file_kernel(client: InMemoryGitHubClient) -> AgentKernel:
+    registry = ToolRegistry()
+    registry.register(GitHubGetFileTool(client))
+    return AgentKernel(
+        registry=registry,
+        policy=_production_github_policy(),
+        audit_log=AuditLog(),
+    )
 
 
 if __name__ == "__main__":

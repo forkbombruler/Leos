@@ -155,6 +155,7 @@ def run(output_dir: Path | None = None) -> dict[str, object]:
         audit_log=audit_log,
         approval_gate=ApprovalGate(lambda step: True),
         planner_config=PlannerConfig(max_risk=RiskLevel.MEDIUM),
+        allow_network_tools=True,
     )
     provider = GitHubIssuePlanProvider(
         GitHubIssuePlanConfig(

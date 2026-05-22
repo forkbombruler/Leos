@@ -20,6 +20,8 @@ from .errors import DryRunFailed, LeosError, SecretBoundaryViolation
 from .state import WorldState
 from .tools import Secret, ToolResult, ToolSpec
 
+_GITHUB_EGRESS_HOST = "api.github.com"
+
 
 class GitHubClient(Protocol):
     def read_issue(self, repo: str, issue_number: int, token: str | None = None) -> dict[str, Any]: ...
@@ -116,6 +118,8 @@ class InMemoryGitHubClient:
 
     def get_file(self, repo: str, path: str, ref: str, token: str | None = None) -> dict[str, Any]:
         self._record_token(token)
+        if (repo, ref, path) not in self.files:
+            raise LeosError("GitHub file not found")
         return dict(self.files[(repo, ref, path)])
 
     def update_file(
@@ -304,6 +308,9 @@ class GitHubReadIssueTool(_GitHubToolBase):
         permissions=(),
         default_risk=RiskLevel.LOW,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET",),
         input_schema={"type": "object", "required": ["repo", "issue_number"]},
         output_schema={"type": "object", "required": ["github_issue"]},
     )
@@ -334,6 +341,9 @@ class GitHubCreateBranchTool(_GitHubToolBase):
         reversibility=Reversibility.REVERSIBLE,
         compensation_strategy=CompensationStrategy.UNDO,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET", "POST", "DELETE"),
         input_schema={"type": "object", "required": ["repo", "branch", "base"]},
         output_schema={"type": "object", "required": ["github_branch"]},
         causal_contract=github_create_branch_causal_contract(),
@@ -387,6 +397,9 @@ class GitHubGetFileTool(_GitHubToolBase):
         permissions=(),
         default_risk=RiskLevel.LOW,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET",),
         input_schema={"type": "object", "required": ["repo", "path", "ref"]},
         output_schema={"type": "object", "required": ["github_file"]},
     )
@@ -417,6 +430,9 @@ class GitHubUpdateFileTool(_GitHubToolBase):
         reversibility=Reversibility.COMPENSATABLE,
         compensation_strategy=CompensationStrategy.COMPENSATE,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET", "PUT"),
         input_schema={"type": "object", "required": ["repo", "path", "branch", "content", "message"]},
         output_schema={"type": "object", "required": ["github_file_updated"]},
         causal_contract=github_update_file_causal_contract(),
@@ -503,6 +519,9 @@ class GitHubOpenPRTool(_GitHubToolBase):
         reversibility=Reversibility.COMPENSATABLE,
         compensation_strategy=CompensationStrategy.COMPENSATE,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET", "POST", "PATCH"),
         input_schema={"type": "object", "required": ["repo", "title", "body", "head", "base"]},
         output_schema={"type": "object", "required": ["github_pr"]},
         causal_contract=github_open_pr_causal_contract(),
@@ -530,6 +549,8 @@ class GitHubOpenPRTool(_GitHubToolBase):
             )
         except LeosError as exc:
             return _tool_error(exc)
+        pr.setdefault("head", str(arguments["head"]))
+        pr.setdefault("base", str(arguments["base"]))
         return ToolResult(
             True,
             "Opened GitHub PR",
@@ -561,6 +582,9 @@ class GitHubCommentTool(_GitHubToolBase):
         reversibility=Reversibility.COMPENSATABLE,
         compensation_strategy=CompensationStrategy.COMPENSATE,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("POST", "DELETE"),
         input_schema={"type": "object", "required": ["repo", "issue_number", "body"]},
         output_schema={"type": "object", "required": ["github_comment"]},
         causal_contract=github_comment_causal_contract(),
@@ -611,6 +635,9 @@ class GitHubCheckCIStatusTool(_GitHubToolBase):
         permissions=(),
         default_risk=RiskLevel.LOW,
         secrets_allowed=True,
+        network_access=True,
+        egress_host=_GITHUB_EGRESS_HOST,
+        egress_methods=("GET",),
         input_schema={"type": "object", "required": ["repo", "ref"]},
         output_schema={"type": "object", "required": ["github_ci_status"]},
     )

@@ -5,7 +5,7 @@
 - Command: `python -m unittest discover -s tests`
 - Exit code: `0`
 - Status: `passed`
-- Duration seconds: `2.055`
+- Duration seconds: `2.0`
 - Truncated: `False`
 
 ### stdout
@@ -42,6 +42,8 @@ Facts: 1 key(s)
     "output_schema": {},
     "timeout_ms": 3000,
     "network_access": false,
+    "egress_host": null,
+    "egress_methods": [],
     "filesystem_scope": "none",
     "secrets_allowed": false,
     "sandbox_policy": "none",
@@ -87,6 +89,8 @@ Facts: 1 key(s)
     },
     "timeout_ms": 3000,
     "network_access": false,
+    "egress_host": null,
+    "egress_methods": [],
     "filesystem_scope": "workspace",
     "secrets_allowed": false,
     "sandbox_policy": "workspace",
@@ -99,7 +103,7 @@ Facts: 1 key(s)
 ]
 Policy configuration is valid.
 proof_status=release_grade release_grade=True
-Enqueued: 604652ca-2477-4cb5-88b7-cd68b2d20eba
+Enqueued: f89e92a3-8554-4a07-b6e8-48b052e5b82e
 Status: failed
 Task file is valid.
 echo: verified risk=low
@@ -111,7 +115,7 @@ echo                  risk=low       rev=irreversible  perm=none
 safe_file_write       risk=medium    rev=reversible    perm=write_files
   Write a UTF-8 file inside the configured workspace root.
 Integrity: FAIL (1 issue(s))
-  [0] event_hash_mismatch: expected=091afe448c0673bfb0dd6a4527d867883a3450b68c1366a23d9d52ccc1d8239d observed=0ab13436e38a351a954f6cc3bb676747929d5b119a2513e3607e0b9fd83eb4bb
+  [0] event_hash_mismatch: expected=6fc33fa75f6a06438d25de6b49a63825c38cc027502b3b80c4355f8ef1eacad6 observed=23aa31d73e260a9b618ff709f9d33438e0c3f8e7e9ca7bf6189c8d83bd573dca
 Integrity: OK
 Applied events: 1
 Facts:
@@ -125,17 +129,17 @@ echo: blocked risk=low
 Progress: 0/1 verified, 1 blocked, 0 failed, 0 rolled-back [blocked]
 echo: verified risk=low
 Progress: 1/1 verified, 0 blocked, 0 failed, 0 rolled-back [complete]
-Signed manifest written to /tmp/tmp_mnq3q0k/signed.json
+Signed manifest written to /tmp/tmp2hv2q8o9/signed.json
 Policy configuration is valid. Signature verified.
 report.md: pattern=github-classic-token
-<redacted> written to /tmp/tmph3bknrll/trace.html
+<redacted> written to /tmp/tmpqg7nayu_/trace.html
 
 ```
 
 ### stderr
 
 ```text
-..........................................................................Issue: $: 'steps' is a required property
+................................................................................Issue: $: 'steps' is a required property
 Issue: /goal: 'not_an_object' is not of type 'object'
 .Unknown tool: nonexistent
 ..............................................................................Error: invalid --args JSON: Expecting value: line 1 column 1 (char 0)
@@ -147,9 +151,9 @@ Issue: /goal: 'not_an_object' is not of type 'object'
 .Issue: policy_config_invalid: Policy-as-code rules cannot directly approve actions
 .Error: file not found: /tmp/nonexistent_policy_test.json
 ....................................Signature verification failed: Policy signature verification failed — manifest may have been tampered
-...........................................................................................................................................................................................................................................................................................................................................................................................................
+...........................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 598 tests in 1.784s
+Ran 620 tests in 1.732s
 
 OK
 

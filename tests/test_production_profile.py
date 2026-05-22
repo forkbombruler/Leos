@@ -8,7 +8,13 @@ from leos_agent import (
     ApprovalGate,
     CausalContract,
     EgressPolicy,
+    GitHubCheckCIStatusTool,
+    GitHubCommentTool,
     GitHubCreateBranchTool,
+    GitHubGetFileTool,
+    GitHubOpenPRTool,
+    GitHubReadIssueTool,
+    GitHubUpdateFileTool,
     Goal,
     InMemoryGitHubClient,
     Permission,
@@ -147,6 +153,59 @@ class ProductionProfileTests(unittest.TestCase):
             any("egress policy" in str(event.payload.get("reason", "")) for event in kernel.audit_log.events)
         )
 
+    def test_egress_policy_rejects_local_private_and_wildcard_hosts(self) -> None:
+        policy = EgressPolicy(allowed_hosts=("localhost", "127.0.0.1", "10.0.0.1", "192.168.1.10", "*"))
+
+        self.assertFalse(policy.allows("localhost"))
+        self.assertFalse(policy.allows("127.0.0.1"))
+        self.assertFalse(policy.allows("10.0.0.1"))
+        self.assertFalse(policy.allows("172.16.0.1"))
+        self.assertFalse(policy.allows("192.168.1.10"))
+        self.assertFalse(policy.allows("*"))
+
+    def test_github_tools_declare_network_egress_metadata(self) -> None:
+        client = InMemoryGitHubClient()
+        tools = (
+            GitHubReadIssueTool(client),
+            GitHubCreateBranchTool(client),
+            GitHubGetFileTool(client),
+            GitHubUpdateFileTool(client),
+            GitHubOpenPRTool(client),
+            GitHubCommentTool(client),
+            GitHubCheckCIStatusTool(client),
+        )
+
+        for tool in tools:
+            self.assertTrue(tool.spec.network_access, tool.spec.name)
+            self.assertEqual(tool.spec.egress_host, "api.github.com")
+            self.assertTrue(tool.spec.egress_methods, tool.spec.name)
+
+    def test_production_blocks_github_tool_without_egress_policy(self) -> None:
+        client = InMemoryGitHubClient()
+        client.seed_issue("o/r", 1, title="t", body="b")
+        tool = GitHubReadIssueTool(client)
+
+        kernel, plan = _run_tool(tool, arguments={"repo": "o/r", "issue_number": 1})
+
+        self.assertEqual(plan.steps[0].status.value, "blocked")
+        self.assertTrue(
+            any("egress policy" in str(event.payload.get("reason", "")) for event in kernel.audit_log.events)
+        )
+
+    def test_production_blocks_github_tool_with_wrong_egress_host(self) -> None:
+        client = InMemoryGitHubClient()
+        client.seed_issue("o/r", 1, title="t", body="b")
+        tool = GitHubReadIssueTool(client)
+        policy = PolicyEngine.from_profile("production_locked_down")
+        policy.egress_policy = EgressPolicy(allowed_hosts=("example.com",))
+
+        kernel, plan = _run_tool(tool, policy=policy, arguments={"repo": "o/r", "issue_number": 1})
+
+        self.assertEqual(plan.steps[0].status.value, "blocked")
+        self.assertTrue(
+            any("api.github.com" in str(event.payload.get("reason", "")) for event in kernel.audit_log.events)
+        )
+
     def test_medium_tool_without_causal_contract_blocked_in_production(self) -> None:
         tool = _Tool(ToolSpec("medium", "m", (), default_risk=RiskLevel.MEDIUM, output_schema={"type": "object"}))
         kernel, plan = _run_tool(tool)
@@ -211,12 +270,36 @@ class ProductionProfileTests(unittest.TestCase):
     def test_github_create_branch_has_production_causal_contract(self) -> None:
         client = InMemoryGitHubClient()
         tool = GitHubCreateBranchTool(client)
+        policy = PolicyEngine.from_profile("production_locked_down")
+        policy.egress_policy = EgressPolicy(allowed_hosts=("api.github.com",))
 
-        kernel, plan = _run_tool(tool, approve=True, arguments={"repo": "o/r", "branch": "feature", "base": "main"})
+        kernel, plan = _run_tool(
+            tool,
+            approve=True,
+            policy=policy,
+            arguments={"repo": "o/r", "branch": "feature", "base": "main"},
+        )
 
         self.assertEqual(plan.steps[0].status.value, "verified")
         self.assertIn(("o/r", "feature"), client.branches)
         self.assertFalse(any(event.event_type == "causal_contract.missing" for event in kernel.audit_log.events))
+
+    def test_production_still_requires_approval_for_github_write_after_egress(self) -> None:
+        client = InMemoryGitHubClient()
+        tool = GitHubCreateBranchTool(client)
+        policy = PolicyEngine.from_profile("production_locked_down")
+        policy.egress_policy = EgressPolicy(allowed_hosts=("api.github.com",))
+
+        kernel, plan = _run_tool(
+            tool,
+            approve=False,
+            policy=policy,
+            arguments={"repo": "o/r", "branch": "feature", "base": "main"},
+        )
+
+        self.assertEqual(plan.steps[0].status.value, "blocked")
+        self.assertNotIn(("o/r", "feature"), client.branches)
+        self.assertTrue(any(event.event_type == "approval.rejected" for event in kernel.audit_log.events))
 
     def test_developer_local_warns_for_missing_causal_contract(self) -> None:
         tool = _Tool(ToolSpec("medium", "m", (), default_risk=RiskLevel.MEDIUM))

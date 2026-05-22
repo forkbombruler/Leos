@@ -18,6 +18,7 @@ from leos_agent import (
     EgressPolicy,
     GitHubConflictError,
     GitHubCreateBranchTool,
+    GitHubGetFileTool,
     GitHubOpenPRTool,
     GitHubRESTClient,
     GitHubUpdateFileTool,
@@ -50,6 +51,7 @@ def main() -> int:
     token = Secret(token_value)
     client = GitHubRESTClient()
     registry = ToolRegistry()
+    registry.register(GitHubGetFileTool(client))
     registry.register(GitHubCreateBranchTool(client))
     registry.register(GitHubUpdateFileTool(client))
     registry.register(GitHubOpenPRTool(client))
@@ -62,11 +64,19 @@ def main() -> int:
     summary: dict[str, object] = {"repo": repo, "base_branch": base_branch, "work_branch": work_branch}
     try:
         previous = None
-        try:
-            current = client.get_file(repo, target_path, base_branch, token=token.unwrap())
+        current = _tool_mediated_get_file(
+            kernel,
+            repo=repo,
+            path=target_path,
+            ref=base_branch,
+            token=token,
+            purpose="preread",
+            allow_missing=True,
+        )
+        if current is not None:
             previous = str(current.get("content", ""))
             expected_sha = str(current.get("sha", ""))
-        except Exception:
+        else:
             expected_sha = None
             previous = ""
         goal = Goal(
@@ -123,17 +133,24 @@ def main() -> int:
             raise GitHubConflictError("transaction did not verify every real-write step")
         summary["branch_created"] = "github_branch" in kernel.state.facts
         summary["file_updated"] = "github_file_updated" in kernel.state.facts
-        read_back = client.get_file(repo, target_path, work_branch, token=token.unwrap())
+        read_back = _tool_mediated_get_file(
+            kernel,
+            repo=repo,
+            path=target_path,
+            ref=work_branch,
+            token=token,
+            purpose="readback",
+            allow_missing=False,
+        )
+        if read_back is None or read_back.get("content") != content:
+            raise GitHubConflictError("read-back verification failed")
         kernel.audit_log.record(
-            "github.real_write.readback_direct_client_call",
-            "Read-back verification used direct GitHubRESTClient call; "
-            "keep token redacted and migrate to tool-mediated read-back.",
+            "github.real_write.readback_verified",
+            "Tool-mediated GitHub read-back verified expected content",
             repo=repo,
             path=target_path,
             branch=work_branch,
         )
-        if read_back.get("content") != content:
-            raise GitHubConflictError("read-back verification failed")
         summary["read_back_verified"] = True
         pr = kernel.state.facts.get("github_pr", {})
         summary["pr_number"] = pr.get("number")
@@ -159,6 +176,50 @@ def _required_env(name: str) -> str:
 
 def _without_none(value: dict[str, object]) -> dict[str, object]:
     return {key: item for key, item in value.items() if item is not None}
+
+
+def _tool_mediated_get_file(
+    kernel: AgentKernel,
+    *,
+    repo: str,
+    path: str,
+    ref: str,
+    token: Secret,
+    purpose: str,
+    allow_missing: bool,
+) -> dict[str, object] | None:
+    event_type = f"github.real_write.tool_mediated_{purpose}"
+    goal = Goal(
+        f"GitHub real-write {purpose}",
+        ["file read"],
+        criteria=({"key": "github_file", "op": "exists"},),
+        stop_conditions=["file read or missing"],
+    )
+    plan = kernel.build_plan(
+        goal,
+        [
+            ActionStep(
+                "github_get_file",
+                {"repo": repo, "path": path, "ref": ref, "token": token},
+                f"Tool-mediated GitHub {purpose}.",
+            )
+        ],
+    )
+    result = kernel.run(plan)
+    file_data = kernel.state.facts.get("github_file")
+    if result.steps and result.steps[0].status.value == "verified" and isinstance(file_data, dict):
+        kernel.audit_log.record(event_type, "GitHub file read via tool-mediated path", repo=repo, path=path, ref=ref)
+        return dict(file_data)
+    if allow_missing:
+        kernel.audit_log.record(
+            f"{event_type}_missing",
+            "GitHub file was not found through tool-mediated pre-read; proceeding as create-new-file case",
+            repo=repo,
+            path=path,
+            ref=ref,
+        )
+        return None
+    raise GitHubConflictError(f"tool-mediated GitHub {purpose} failed")
 
 
 def _production_github_policy() -> PolicyEngine:

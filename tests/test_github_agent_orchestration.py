@@ -141,6 +141,7 @@ class GitHubAgentOrchestrationTests(unittest.TestCase):
             audit_log=audit,
             approval_gate=ApprovalGate(lambda step: True),
             planner_config=PlannerConfig(max_risk=RiskLevel.MEDIUM),
+            allow_network_tools=True,
         )
 
     def test_issue_to_pr_orchestration_runs_through_agent_loop(self) -> None:

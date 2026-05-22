@@ -32,6 +32,8 @@ class ToolManifest:
     output_schema: JSONSchema = field(default_factory=dict)
     timeout_ms: int = 3000
     network_access: bool = False
+    egress_host: str | None = None
+    egress_methods: Sequence[str] = ()
     filesystem_scope: str = "none"
     secrets_allowed: bool = False
     sandbox_policy: SandboxPolicy = SandboxPolicy.NONE
@@ -56,6 +58,8 @@ TOOL_MANIFEST_SCHEMA: JSONSchema = {
         "output_schema": {"type": "object"},
         "timeout_ms": {"type": "integer", "minimum": 1},
         "network_access": {"type": "boolean"},
+        "egress_host": {"type": ["string", "null"]},
+        "egress_methods": {"type": "array", "items": {"type": "string"}},
         "filesystem_scope": {"type": "string"},
         "secrets_allowed": {"type": "boolean"},
         "sandbox_policy": {"type": "string", "enum": [policy.value for policy in SandboxPolicy]},
@@ -227,6 +231,8 @@ def tool_manifest_from_mapping(data: Mapping[str, Any]) -> ToolManifest:
         output_schema=dict(data.get("output_schema", {})),
         timeout_ms=int(data.get("timeout_ms", 3000)),
         network_access=bool(data.get("network_access", False)),
+        egress_host=str(data["egress_host"]) if data.get("egress_host") is not None else None,
+        egress_methods=tuple(str(value).upper() for value in data.get("egress_methods", ())),
         filesystem_scope=str(data.get("filesystem_scope", "none")),
         secrets_allowed=bool(data.get("secrets_allowed", False)),
         sandbox_policy=SandboxPolicy(str(data.get("sandbox_policy", SandboxPolicy.NONE.value))),

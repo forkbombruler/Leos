@@ -373,15 +373,18 @@ class TransactionManager:
                 break
 
             contract_missing = self._missing_contract_observations(tool, result)
-            if contract_missing:
+            contract_field_violations = self._contract_field_violations(tool, result)
+            if contract_missing or contract_field_violations:
                 step.status = StepStatus.FAILED
                 error = SchemaValidationFailed("Causal contract required observations missing")
                 self.audit_log.record(
                     "step.causal_contract_verification_failed",
-                    "Causal contract required observations missing",
+                    "Causal contract verification failed",
                     step_id=step.step_id,
                     tool=step.tool_name,
                     missing=contract_missing,
+                    missing_observations=contract_missing,
+                    field_violations=contract_field_violations,
                     observed=list(result.observed_state_delta),
                     error_type=type(error).__name__,
                 )
@@ -509,6 +512,12 @@ class TransactionManager:
         if policy is SandboxPolicy.MICROVM and policy not in sandbox_runners:
             return "microvm sandbox not available — requires external microvm runtime"
         if target_tool.spec.network_access and not allow_network_tools:
+            if (
+                tool is not None
+                and self.policy.profile_name == "production_locked_down"
+                and self.policy.egress_policy is not None
+            ):
+                return None
             return "network access not allowed in default sandbox"
         if policy is SandboxPolicy.WORKSPACE and target_tool.spec.filesystem_scope == "none":
             return "workspace sandbox requires filesystem_scope"
@@ -554,6 +563,13 @@ class TransactionManager:
         if contract is None:
             return []
         return list(contract.missing_required_observations(result.observed_state_delta))
+
+    @staticmethod
+    def _contract_field_violations(tool: Tool, result: ToolResult) -> list[str]:
+        contract = getattr(tool.spec, "causal_contract", None)
+        if contract is None or not hasattr(contract, "field_violations"):
+            return []
+        return list(contract.field_violations(result.observed_state_delta))
 
     def _hydrate_step_metadata(self, step: ActionStep, tool: Tool) -> None:
         step.required_permissions = tuple(tool.spec.permissions)
